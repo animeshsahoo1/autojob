@@ -123,6 +123,20 @@ export async function jobDiscoveryNode(
   const errors: string[] = [];
 
   try {
+    // Check kill switch before processing
+    const { AgentRun } = await import("@/models/agentrun.model");
+    const agentRun = await AgentRun.findById(state.agentRunId);
+    if (agentRun?.killSwitch || agentRun?.status !== "RUNNING") {
+      console.log(
+        `[JobDiscoveryNode] ⏹️ Kill switch activated. Stopping workflow.`,
+      );
+      return {
+        stopRequested: true,
+        runStatus: "STOPPED",
+        lastCheckpoint: "JOB_DISCOVERY_STOPPED",
+      };
+    }
+
     // Validate required state
     if (!state.artifactState?.studentProfile) {
       throw new Error("Artifact state not loaded. Run ArtifactNode first.");
@@ -179,6 +193,35 @@ export async function jobDiscoveryNode(
     const newJobs = recentJobs.filter(
       (job) => !existingJobIds.has(job._id.toString()),
     );
+
+    console.log(
+      `[JobDiscovery] Deduplication: ${recentJobs.length} total → ${newJobs.length} new (${existingJobIds.size} already applied)`,
+    );
+
+    if (newJobs.length === 0) {
+      console.log(
+        `[JobDiscovery] No new jobs to process (all ${recentJobs.length} jobs already applied to)`,
+      );
+      return {
+        jobSearchState: {
+          fetchedJobIds: recentJobs.map((j) => j._id.toString()),
+          totalJobsFound: recentJobs.length,
+          deduplicatedCount: 0,
+        },
+        rankingState: {
+          rankedJobIds: [],
+          jobMatchMap: {},
+        },
+        policyState: {
+          allowedJobIds: [],
+          skippedJobIds: [],
+          skipReasons: {},
+          appliedCountToday: state.policyState?.appliedCountToday || 0,
+          policiesChecked: ["ALL_JOBS_ALREADY_APPLIED"],
+        },
+        lastCheckpoint: "JOB_DISCOVERY",
+      };
+    }
 
     // 3. Calculate match scores and rank
     const jobScores = newJobs.map((job) => {
@@ -255,6 +298,29 @@ export async function jobDiscoveryNode(
     for (const jobScore of jobScores) {
       const job = jobScore.job;
       const jobIdStr = job._id.toString();
+
+      // Policy check: Remote Only requirement
+      if (policy.remoteOnly && !job.isRemote) {
+        skippedJobs.push(jobIdStr);
+        skipReasons[jobIdStr] = `REMOTE_ONLY_MISMATCH (Job is not remote)`;
+        policiesChecked.push(`REMOTE_ONLY_CHECK_${jobIdStr}`);
+        continue;
+      }
+
+      // Policy check: Location matching
+      if (policy.allowedLocations && policy.allowedLocations.length > 0) {
+        const locationMatch = policy.allowedLocations.some((loc: string) =>
+          job.location.toLowerCase().includes(loc.toLowerCase()),
+        );
+        // If job is not remote AND location doesn't match allowed locations, skip it
+        if (!locationMatch && !job.isRemote) {
+          skippedJobs.push(jobIdStr);
+          skipReasons[jobIdStr] =
+            `LOCATION_MISMATCH (${job.location} not in [${policy.allowedLocations.join(", ")}])`;
+          policiesChecked.push(`LOCATION_CHECK_${jobIdStr}`);
+          continue;
+        }
+      }
 
       // Policy check: Min match score
       if (jobScore.matchScore < policy.minMatchScore) {

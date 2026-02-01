@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:jobs": "tsx scripts/seed-jobs.ts",
-    "worker": "tsx lib/queue/apply-worker.ts",
-    "discovery": "tsx scripts/run-discovery.ts"
+    "seed:jobs": "tsx --env-file=.env scripts/seed-jobs.ts",
+    "worker": "tsx --env-file=.env lib/queue/apply-worker.ts",
+    "worker:discovery": "tsx --env-file=.env lib/queue/discovery-worker.ts",
+    "worker:all": "concurrently \"npm run worker:discovery\" \"npm run worker\"",
+    "discovery": "tsx --env-file=.env scripts/run-discovery.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -28,6 +30,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@upstash/redis": "^1.36.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.67.2",
     "class-variance-authority": "^0.7.1",

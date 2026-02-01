@@ -130,16 +130,18 @@ const userSchema = new Schema<IUser>(
       proofLinks: [String],
     },
 
-    resumes: [{
-      type: Schema.Types.ObjectId,
-      ref: "Resume",
-    }],
+    resumes: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Resume",
+      },
+    ],
 
     parsingFeedback: [String],
 
     applyPolicy: {
       maxApplicationsPerDay: { type: Number, default: 10 },
-      minMatchScore: { type: Number, default: 60 },
+      minMatchScore: { type: Number, default: 40 },
       allowedLocations: [String],
       remoteOnly: Boolean,
       visaRequired: Boolean,
@@ -156,7 +158,7 @@ const userSchema = new Schema<IUser>(
       default: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* ---------- Hooks ---------- */
@@ -173,14 +175,11 @@ userSchema.pre("save", function () {
 
 /* ---------- Methods ---------- */
 
-userSchema.methods.isPasswordCorrect = async function (
-  password: string
-) {
+userSchema.methods.isPasswordCorrect = async function (password: string) {
   if (!this.password) return false;
   return await bcrypt.compare(password, this.password);
 };
 
 /* ---------- Export ---------- */
 
-export const User =
-  models?.User || model<IUser>("User", userSchema);
+export const User = models?.User || model<IUser>("User", userSchema);

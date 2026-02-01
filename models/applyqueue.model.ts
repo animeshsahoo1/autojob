@@ -15,7 +15,9 @@ export interface IApplyQueue {
     | "MISSING_EVIDENCE"
     | "COMPANY_COOLDOWN"
     | "DUPLICATE"
-    | "KILL_SWITCH";
+    | "KILL_SWITCH"
+    | "LOCATION_MISMATCH"
+    | "REMOTE_ONLY_MISMATCH";
 
   // AI-generated analysis for skipped jobs
   skipReasoning?: string;

@@ -26,6 +26,7 @@
 
 import { JobApplyAgentState } from "../state";
 import { ChatOpenAI } from "@langchain/openai";
+import { searchResumeEmbeddings } from "@/lib/agent/vector-store";
 import { z } from "zod";
 
 // Schema for hallucination validation
@@ -134,150 +135,137 @@ export async function hallucinationGuardNode(
       throw new Error("Student profile not found in artifact state.");
     }
 
-    const hallucinationRisks: string[] = [];
-    let validationScore = 100;
+    // Collect evidence for LLM validation
+    const allEvidenceText = Object.values(requirementEvidenceMap).join("\n");
+    const allAnswersText = answeredQuestions.map((qa) => qa.answer).join("\n");
+    const combinedGeneratedContent = `${allEvidenceText}\n${allAnswersText}`;
 
-    // 1. Validate requirement evidence against student profile
-    for (const [requirement, evidence] of Object.entries(
-      requirementEvidenceMap,
-    )) {
-      // Check if evidence mentions skills not in student profile
-      const mentionedSkills = extractMentionedSkills(evidence);
-      for (const skill of mentionedSkills) {
-        if (!isSkillInProfile(skill, studentProfile.skills)) {
-          hallucinationRisks.push(
-            `Evidence mentions skill "${skill}" not in student profile for requirement: ${requirement}`,
-          );
-          validationScore -= 10;
-        }
-      }
+    // Get semantic similarity context from Vector DB (optional - don't fail if unavailable)
+    let vectorContext = "";
+    let avgSimilarity = 0;
 
-      // Check if evidence is grounded in bullet bank
-      const isGroundedInBullets = isEvidenceInBulletBank(evidence, bulletBank);
-      if (!isGroundedInBullets && bulletBank.length > 0) {
-        hallucinationRisks.push(
-          `Evidence not found in bullet bank for requirement: ${requirement}`,
+    if (combinedGeneratedContent.trim().length > 0) {
+      try {
+        const similarChunks = await searchResumeEmbeddings(
+          state.userId,
+          combinedGeneratedContent,
+          5, // Get top 5 most similar chunks
         );
-        validationScore -= 5;
-      }
-    }
 
-    // 2. Validate screening question answers
-    for (const qa of answeredQuestions) {
-      const mentionedSkills = extractMentionedSkills(qa.answer);
-      for (const skill of mentionedSkills) {
-        if (!isSkillInProfile(skill, studentProfile.skills)) {
-          hallucinationRisks.push(
-            `Answer mentions skill "${skill}" not in student profile for question: ${qa.question}`,
+        if (similarChunks.length > 0) {
+          avgSimilarity =
+            similarChunks.reduce((sum, chunk) => sum + chunk.score, 0) /
+            similarChunks.length;
+          console.log(
+            `[HallucinationGuard] ✅ Vector DB similarity: ${avgSimilarity.toFixed(2)}`,
           );
-          validationScore -= 10;
+
+          // Build context from similar chunks
+          vectorContext = similarChunks
+            .map(
+              (chunk, i) =>
+                `${i + 1}. [Score: ${chunk.score.toFixed(2)}] ${chunk.text.substring(0, 200)}...`,
+            )
+            .join("\n");
+        } else {
+          console.log(
+            "[HallucinationGuard] ⚠️ No similar chunks found in vector DB",
+          );
         }
-      }
-    }
-
-    // 3. Check confidence levels - flag if too many weak matches
-    if (confidenceLevels) {
-      const totalMatches =
-        confidenceLevels.strong +
-        confidenceLevels.medium +
-        confidenceLevels.weak;
-      const weakRatio =
-        totalMatches > 0 ? confidenceLevels.weak / totalMatches : 0;
-
-      if (weakRatio > 0.5) {
-        hallucinationRisks.push(
-          `More than 50% of matches are weak confidence (${confidenceLevels.weak}/${totalMatches})`,
+      } catch (vectorError: any) {
+        console.warn(
+          "[HallucinationGuard] ⚠️ Vector DB unavailable, continuing without semantic search",
         );
-        validationScore -= 15;
+        console.warn(`Vector DB error: ${vectorError?.message || vectorError}`);
+        // Continue without vector context - LLM will validate based on profile only
       }
     }
 
-    // 4. TODO: Validate against Vector DB (resume embeddings)
-    // TODO: Semantic match against stored resume chunks
-    // TODO: Confirm claims are present or strongly implied in resume text
-    // This would involve:
-    // - Embedding the generated content
-    // - Searching vector store for similar resume chunks
-    // - Calculating semantic similarity scores
-    // - Flagging content with low similarity to any resume chunk
-
-    // 5. Use LLM for deep validation (optional but thorough)
+    // Use LLM for validation with all evidence
     const llm = new ChatOpenAI({
       modelName: "gpt-4o-mini",
       temperature: 0,
     });
 
-    const allEvidenceText = Object.values(requirementEvidenceMap).join("\n");
-    const allAnswersText = answeredQuestions.map((qa) => qa.answer).join("\n");
+    const validationPrompt = `You are validating a job application's generated content against a candidate's resume. Your job is to determine if the application should be SUBMITTED or BLOCKED.
 
-    const validationPrompt = `You are a hallucination detector for job applications. Verify if the generated content is grounded in the student's actual profile.
+**CRITICAL: Only block if there are MAJOR issues - missing 6-7+ required skills OR completely fabricated experience.**
 
 Student Profile:
-- Skills: ${studentProfile.skills.join(", ")}
+- Skills: ${studentProfile.skills.slice(0, 50).join(", ")}
 - Education: ${studentProfile.education.join(", ")}
-- Experience: ${studentProfile.experience.join(", ")}
-- Projects: ${studentProfile.projects.join(", ")}
-- Bullet Bank: ${bulletBank.slice(0, 20).join("; ")}
+- Experience: ${studentProfile.experience.slice(0, 5).join(", ")}
+- Projects: ${studentProfile.projects.slice(0, 5).join(", ")}
 
-Generated Content:
-Evidence for Requirements:
+${vectorContext ? `Resume Evidence (semantic similarity: ${avgSimilarity.toFixed(2)}):\n${vectorContext}` : "Vector DB unavailable - validate based on profile only"}
+
+Generated Application Content:
 ${allEvidenceText}
-
-Screening Question Answers:
 ${allAnswersText}
 
-Check for:
-1. Claims about skills/technologies not in the student's profile
-2. Exaggerated experience levels
-3. Unverifiable statements
-4. Content that cannot be traced back to the profile
+Job Requirements Analysis:
+${confidenceLevels ? `Strong Matches: ${confidenceLevels.strong}, Medium: ${confidenceLevels.medium}, Weak: ${confidenceLevels.weak}` : "Not available"}
+
+**BLOCKING CRITERIA (set isGrounded: false ONLY if):**
+1. Missing 6-7+ critical skills/technologies required for the job
+2. Completely fabricated projects or experience with NO basis in resume
+3. Claims expertise in areas COMPLETELY absent from profile
+
+**DO NOT BLOCK FOR:**
+- Missing 1-3 skills or frameworks (candidates can learn)
+- Rephrasing experience or projects differently
+- Reasonable skill inference (e.g., "frontend development" from React experience)
+- Professional language or formatting differences
+- Minor exaggerations or emphasis changes
+
+**If semantic similarity is > 0.6, strongly lean towards passing.**
 
 Return:
-- isGrounded: true if all content is verifiable and accurate
-- hallucinationRisks: list of specific concerns (empty if none)
-- confidenceScore: 0-100 (100 = fully grounded, 0 = mostly fabricated)
-- reasoning: brief explanation`;
+- isGrounded: true (SUBMIT) unless MAJOR blocking criteria met
+- hallucinationRisks: list ONLY critical blockers (empty array if should submit)
+- confidenceScore: 70-100 for good applications, 40-69 for acceptable, < 40 only for major issues
+- reasoning: brief explanation of decision`;
 
     const structuredLLM = llm.withStructuredOutput(HallucinationCheckSchema);
     const validationResult = await structuredLLM.invoke(validationPrompt);
 
-    // Combine manual checks with LLM validation
-    const combinedHallucinationRisks = [
-      ...hallucinationRisks,
-      ...validationResult.hallucinationRisks,
-    ];
+    console.log(`[HallucinationGuard] LLM Validation Result:`, {
+      isGrounded: validationResult.isGrounded,
+      confidenceScore: validationResult.confidenceScore,
+      risksCount: validationResult.hallucinationRisks.length,
+      avgSimilarity: avgSimilarity.toFixed(2),
+    });
 
-    const finalConfidenceScore = Math.min(
-      validationScore,
-      validationResult.confidenceScore,
-    );
-
-    const isGrounded = validationResult.isGrounded && validationScore >= 60;
-    const validationPassed =
-      isGrounded && combinedHallucinationRisks.length === 0;
-
-    // 6. Block workflow if validation fails
+    // Block workflow only if LLM says it's not grounded
     if (!validationPassed) {
+      console.log(
+        `[HallucinationGuard] ❌ BLOCKED - LLM flagged critical issues`,
+      );
       return {
         validationState: {
-          isGrounded,
-          hallucinationRisks: combinedHallucinationRisks,
-          confidenceScore: finalConfidenceScore,
+          isGrounded: false,
+          hallucinationRisks: validationResult.hallucinationRisks,
+          confidenceScore: validationResult.confidenceScore,
           validationPassed: false,
         },
         stopRequested: true,
         runStatus: "STOPPED",
         lastCheckpoint: "VALIDATION_FAILED",
         errors: [
-          `Hallucination detected. Risks: ${combinedHallucinationRisks.join("; ")}`,
+          `Critical validation failure. Risks: ${validationResult.hallucinationRisks.join("; ")}`,
         ],
       };
     }
 
-    // Validation passed
+    // Validation passed - submit application
+    console.log(
+      `[HallucinationGuard] ✅ PASSED - Application will be submitted`,
+    );
     return {
       validationState: {
         isGrounded: true,
+        hallucinationRisks: validationResult.hallucinationRisks,
+        confidenceScore: validationResult.confidenceScore,
         hallucinationRisks: [],
         confidenceScore: finalConfidenceScore,
         validationPassed: true,

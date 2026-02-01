@@ -4,9 +4,26 @@ import { Job } from "../models/job.model";
 import crypto from "crypto";
 
 const companies = [
-  "Google", "Microsoft", "Amazon", "Meta", "Apple", "Netflix", "Tesla", 
-  "Uber", "Airbnb", "Spotify", "Adobe", "Salesforce", "Oracle", "IBM",
-  "Stripe", "Shopify", "Coinbase", "Atlassian", "GitHub", "Figma"
+  "Google",
+  "Microsoft",
+  "Amazon",
+  "Meta",
+  "Apple",
+  "Netflix",
+  "Tesla",
+  "Uber",
+  "Airbnb",
+  "Spotify",
+  "Adobe",
+  "Salesforce",
+  "Oracle",
+  "IBM",
+  "Stripe",
+  "Shopify",
+  "Coinbase",
+  "Atlassian",
+  "GitHub",
+  "Figma",
 ];
 
 const jobTitles = [
@@ -24,7 +41,7 @@ const jobTitles = [
   "Mobile Developer",
   "QA Engineer",
   "Site Reliability Engineer",
-  "Technical Lead"
+  "Technical Lead",
 ];
 
 const locations = [
@@ -39,7 +56,7 @@ const locations = [
   "Portland, OR",
   "Atlanta, GA",
   "Miami, FL",
-  "Remote"
+  "Remote",
 ];
 
 const skillSets = [
@@ -52,7 +69,7 @@ const skillSets = [
   ["DevOps", "Jenkins", "Terraform", "Ansible", "CI/CD"],
   ["C++", "System Design", "Linux", "Performance Optimization"],
   ["Vue.js", "Nuxt", "GraphQL", "REST API", "Firebase"],
-  ["Angular", "RxJS", "NgRx", "Azure", "SQL Server"]
+  ["Angular", "RxJS", "NgRx", "Azure", "SQL Server"],
 ];
 
 const requirementTemplates = [
@@ -65,7 +82,7 @@ const requirementTemplates = [
   "Understanding of software design patterns",
   "Ability to write clean, maintainable code",
   "Experience with unit testing and TDD",
-  "Knowledge of web security best practices"
+  "Knowledge of web security best practices",
 ];
 
 const descriptionTemplates = [
@@ -76,15 +93,29 @@ const descriptionTemplates = [
   "Build the future of our platform while working with the latest technologies and best practices.",
   "Contribute to mission-critical systems that power our global operations.",
   "Design and implement scalable solutions that meet the needs of our growing customer base.",
-  "Join a team of world-class engineers building products that make a difference."
+  "Join a team of world-class engineers building products that make a difference.",
 ];
 
-const employmentTypes: Array<"full-time" | "part-time" | "internship" | "contract"> = [
-  "full-time", "full-time", "full-time", "full-time", "full-time",
-  "full-time", "full-time", "contract", "internship", "part-time"
+const employmentTypes: Array<
+  "full-time" | "part-time" | "internship" | "contract"
+> = [
+  "full-time",
+  "full-time",
+  "full-time",
+  "full-time",
+  "full-time",
+  "full-time",
+  "full-time",
+  "contract",
+  "internship",
+  "part-time",
 ];
 
-function generateJobHash(company: string, title: string, location: string): string {
+function generateJobHash(
+  company: string,
+  title: string,
+  location: string,
+): string {
   return crypto
     .createHash("md5")
     .update(`${company}-${title}-${location}-${Date.now()}`)
@@ -110,7 +141,7 @@ async function generateJobs() {
 
   const jobs = [];
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 5; i++) {
     const company = getRandomItem(companies);
     const title = getRandomItem(jobTitles);
     const location = getRandomItem(locations);
@@ -129,7 +160,9 @@ async function generateJobs() {
       requirements: getRandomItems(requirementTemplates, 5),
       skills,
       employmentType,
-      startDate: new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000),
+      startDate: new Date(
+        Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000,
+      ),
       questions: [
         {
           question: "Are you authorized to work in the United States?",
@@ -157,13 +190,19 @@ async function generateJobs() {
 
   // Display summary
   console.log("\n📊 Job Summary:");
-  console.log(`- Companies: ${new Set(jobs.map(j => j.company)).size}`);
-  console.log(`- Job Titles: ${new Set(jobs.map(j => j.title)).size}`);
-  console.log(`- Locations: ${new Set(jobs.map(j => j.location)).size}`);
-  console.log(`- Remote Jobs: ${jobs.filter(j => j.isRemote).length}`);
-  console.log(`- Full-time: ${jobs.filter(j => j.employmentType === "full-time").length}`);
-  console.log(`- Contract: ${jobs.filter(j => j.employmentType === "contract").length}`);
-  console.log(`- Internship: ${jobs.filter(j => j.employmentType === "internship").length}`);
+  console.log(`- Companies: ${new Set(jobs.map((j) => j.company)).size}`);
+  console.log(`- Job Titles: ${new Set(jobs.map((j) => j.title)).size}`);
+  console.log(`- Locations: ${new Set(jobs.map((j) => j.location)).size}`);
+  console.log(`- Remote Jobs: ${jobs.filter((j) => j.isRemote).length}`);
+  console.log(
+    `- Full-time: ${jobs.filter((j) => j.employmentType === "full-time").length}`,
+  );
+  console.log(
+    `- Contract: ${jobs.filter((j) => j.employmentType === "contract").length}`,
+  );
+  console.log(
+    `- Internship: ${jobs.filter((j) => j.employmentType === "internship").length}`,
+  );
 
   process.exit(0);
 }

@@ -50,6 +50,8 @@ export default function SkippedJobsPage() {
       COMPANY_COOLDOWN: "Company Cooldown",
       DUPLICATE: "Duplicate",
       KILL_SWITCH: "Kill Switch",
+      LOCATION_MISMATCH: "Location Mismatch",
+      REMOTE_ONLY_MISMATCH: "Remote Only",
     };
     return labels[reason] || reason;
   };
@@ -62,6 +64,8 @@ export default function SkippedJobsPage() {
       COMPANY_COOLDOWN: "bg-purple-100 text-purple-800",
       DUPLICATE: "bg-gray-100 text-gray-800",
       KILL_SWITCH: "bg-red-100 text-red-800",
+      LOCATION_MISMATCH: "bg-blue-100 text-blue-800",
+      REMOTE_ONLY_MISMATCH: "bg-cyan-100 text-cyan-800",
     };
     return colors[reason] || "bg-gray-100 text-gray-800";
   };
