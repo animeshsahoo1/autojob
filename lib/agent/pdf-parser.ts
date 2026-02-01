@@ -577,7 +577,7 @@ Extract the following structure:
   "education": [{ "institution": string, "degree": string, "major": string, "gpa": number, "startDate": string, "endDate": string }],
   "workExperience": [{ "company": string, "position": string, "startDate": string, "endDate": string, "responsibilities": [string], "achievements": [string], "technologies": [string] }],
   "skills": [{ "category": string, "skills": [string] }],
-  "projects": [{ "name": string, "description": string, "technologies": [string], "url": string, "github": string }],
+  "projects": [{ "name": string, "description": string, "role": string, "startDate": string, "endDate": string, "technologies": [string], "achievements": [string], "highlights": [string], "url": string, "github": string, "teamSize": number }],
   "certifications": [{ "name": string, "issuer": string, "issueDate": string }]
 }
 
@@ -613,7 +613,7 @@ Output valid JSON only:`;
     
     // Clean up response
     aiResponse = aiResponse
-      .replace(/<think>.*?<\/think>/gs, '')
+      .replace(/<think>.*?<\/think>/g, '')
       .replace(/```json\s*/g, '')
       .replace(/```\s*/g, '')
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:jobs": "tsx scripts/seed-jobs.ts"
+    "seed:jobs": "tsx scripts/seed-jobs.ts",
     "worker": "tsx lib/queue/apply-worker.ts",
     "discovery": "tsx scripts/run-discovery.ts"
   },

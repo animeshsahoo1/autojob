@@ -276,8 +276,8 @@ const personalInfoSchema = new Schema<IPersonalInfo>({
 });
 
 const educationSchema = new Schema<IEducation>({
-  institution: { type: String, required: true },
-  degree: { type: String, required: true },
+  institution: { type: String },
+  degree: { type: String },
   major: { type: String },
   minor: { type: String },
   gpa: { type: Number },
@@ -292,8 +292,8 @@ const educationSchema = new Schema<IEducation>({
 });
 
 const workExperienceSchema = new Schema<IWorkExperience>({
-  company: { type: String, required: true },
-  position: { type: String, required: true },
+  company: { type: String },
+  position: { type: String },
   location: { type: String },
   isRemote: { type: Boolean },
   startDate: { type: Date },
@@ -310,7 +310,7 @@ const workExperienceSchema = new Schema<IWorkExperience>({
 });
 
 const projectSchema = new Schema<IProject>({
-  name: { type: String, required: true },
+  name: { type: String },
   description: { type: String },
   role: { type: String },
   startDate: { type: Date },
@@ -324,8 +324,8 @@ const projectSchema = new Schema<IProject>({
 });
 
 const certificationSchema = new Schema<ICertification>({
-  name: { type: String, required: true },
-  issuer: { type: String, required: true },
+  name: { type: String },
+  issuer: { type: String },
   issueDate: { type: Date },
   expirationDate: { type: Date },
   credentialId: { type: String },
@@ -334,12 +334,12 @@ const certificationSchema = new Schema<ICertification>({
 });
 
 const skillSchema = new Schema<ISkill>({
-  category: { type: String, required: true },
+  category: { type: String },
   skills: [{ type: String }],
 });
 
 const publicationSchema = new Schema<IPublication>({
-  title: { type: String, required: true },
+  title: { type: String },
   authors: [{ type: String }],
   publisher: { type: String },
   publicationDate: { type: Date },
@@ -349,15 +349,15 @@ const publicationSchema = new Schema<IPublication>({
 });
 
 const awardSchema = new Schema<IAward>({
-  title: { type: String, required: true },
-  issuer: { type: String, required: true },
+  title: { type: String },
+  issuer: { type: String },
   date: { type: Date },
   description: { type: String },
 });
 
 const volunteerExperienceSchema = new Schema<IVolunteerExperience>({
-  organization: { type: String, required: true },
-  role: { type: String, required: true },
+  organization: { type: String },
+  role: { type: String },
   startDate: { type: Date },
   endDate: { type: Date },
   isCurrent: { type: Boolean },
@@ -366,16 +366,15 @@ const volunteerExperienceSchema = new Schema<IVolunteerExperience>({
 });
 
 const languageSchema = new Schema<ILanguage>({
-  language: { type: String, required: true },
+  language: { type: String },
   proficiency: {
     type: String,
     enum: ["native", "fluent", "professional", "intermediate", "basic"],
-    required: true,
   },
 });
 
 const referenceSchema = new Schema<IReference>({
-  name: { type: String, required: true },
+  name: { type: String },
   position: { type: String },
   company: { type: String },
   email: { type: String },
