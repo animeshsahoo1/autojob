@@ -321,97 +321,90 @@ export default function DashboardPage() {
         </div>
 
         {/* Jobs Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Recent Jobs</CardTitle>
-                <CardDescription>
-                  Browse and apply to available positions
-                </CardDescription>
-              </div>
-              <Button variant="ghost" asChild>
-                <Link href="/jobs">
-                  View All →
-                </Link>
-              </Button>
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Recent Jobs</h2>
+              <p className="text-muted-foreground">
+                Browse and apply to available positions
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {jobs.length === 0 ? (
-              <div className="text-center py-12">
+            <Button variant="outline" asChild>
+              <Link href="/jobs">
+                View All →
+              </Link>
+            </Button>
+          </div>
+
+          {jobs.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
                 <Briefcase className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                 <p className="text-muted-foreground">No jobs available</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {jobs.slice(0, 5).map((job) => (
-                  <Link
-                    key={job._id}
-                    href={`/jobs/${job._id}`}
-                    className="block"
-                  >
-                    <Card className="hover:bg-accent/50 transition-colors">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1.5 rounded-md bg-primary/10 shrink-0">
-                                <Briefcase className="h-4 w-4 text-primary" />
-                              </div>
-                              <h3 className="font-semibold truncate">
-                                {job.title}
-                              </h3>
-                              {job.isRemote && (
-                                <Badge variant="secondary" className="text-xs shrink-0">
-                                  Remote
-                                </Badge>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                              <div className="flex items-center gap-1">
-                                <Building2 className="w-3.5 h-3.5" />
-                                <span className="truncate">{job.company}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5" />
-                                <span className="truncate">{job.location}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-1.5">
-                              {job.skills.slice(0, 4).map((skill, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {skill}
-                                </Badge>
-                              ))}
-                              {job.skills.length > 4 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{job.skills.length - 4}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          {job.salary && (
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-medium text-green-500">
-                                {job.salary.currency}{" "}
-                                {job.salary.min.toLocaleString()} -{" "}
-                                {job.salary.max.toLocaleString()}
-                              </p>
-                            </div>
-                          )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {jobs.slice(0, 6).map((job) => (
+                <Link
+                  key={job._id}
+                  href={`/jobs/${job._id}`}
+                  className="block group"
+                >
+                  <Card className="h-full hover:border-primary/50 transition-all hover:shadow-md">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                          <Briefcase className="h-5 w-5 text-primary" />
                         </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        {job.isRemote && (
+                          <Badge variant="secondary" className="text-xs">
+                            Remote
+                          </Badge>
+                        )}
+                      </div>
+                      <CardTitle className="line-clamp-2 text-lg group-hover:text-primary transition-colors">
+                        {job.title}
+                      </CardTitle>
+                      <CardDescription className="space-y-1.5 mt-2">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Building2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{job.company}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <MapPin className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{job.location}</span>
+                        </div>
+                        {job.salary && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Clock className="w-3.5 h-3.5 shrink-0" />
+                            <span className="text-green-600 dark:text-green-500 font-medium">
+                              {job.salary.currency} {job.salary.min.toLocaleString()} - {job.salary.max.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex flex-wrap gap-1.5">
+                        {job.skills.slice(0, 3).map((skill, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {skill}
+                          </Badge>
+                        ))}
+                        {job.skills.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{job.skills.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Logs Sliding Panel */}

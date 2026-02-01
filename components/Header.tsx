@@ -11,6 +11,7 @@ import {
   XCircle,
   Sparkles,
   Menu,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -40,7 +41,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/skipped-jobs", label: "Skipped Jobs", icon: XCircle },
-  { href: "/artifacts", label: "Artifacts", icon: Sparkles },
+  { href: "/applied", label: "Applied", icon: Sparkles },
 ];
 
 const Header = () => {
@@ -101,13 +102,6 @@ const Header = () => {
                 >
                   <FileText className="h-4 w-4" />
                   My Resumes
-                </Link>
-                <Link
-                  href="/logs"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                >
-                  <History className="h-4 w-4" />
-                  Activity Logs
                 </Link>
               </nav>
             </SheetContent>
@@ -183,6 +177,10 @@ const Header = () => {
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push("/apply-policy")}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Apply Policy
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/logs")}>
                   <History className="mr-2 h-4 w-4" />
                   Activity Logs
