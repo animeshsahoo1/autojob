@@ -30,7 +30,7 @@ import { ApplyQueue } from "@/models/applyqueue.model";
 import { AgentRun } from "@/models/agentrun.model";
 import { Job, IJob } from "@/models/job.model";
 import { User, IUser } from "@/models/user.model";
-import { Resume, IResume } from "@/models/resume.model";
+import Resume, { IResume } from "@/models/resume.model";
 import { analyzeSkippedJob } from "@/lib/analysis/skip-analyzer";
 import mongoose from "mongoose";
 

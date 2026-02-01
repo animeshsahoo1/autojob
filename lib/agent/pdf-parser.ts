@@ -1,5 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdf = require("pdf-parse");
+import { PDFDocument } from "pdf-lib";
 import { ChatOpenAI } from "@langchain/openai";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { PromptTemplate } from "@langchain/core/prompts";
@@ -118,106 +119,222 @@ function sanitizeEnum<T extends string>(value: any, allowedValues: readonly T[])
 }
 
 /**
- * Extract URLs from raw text for fallback parsing
+ * Extract hyperlinks from PDF using pdf-lib
  */
-function extractUrlsFromText(rawText: string): {
+async function extractHyperlinks(buffer: Buffer): Promise<string[]> {
+  try {
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    const links: string[] = [];
+
+    console.log("🔍 Extracting hyperlinks from PDF...");
+    console.log(`📄 Document has ${pdfDoc.getPageCount()} pages`);
+
+    const pages = pdfDoc.getPages();
+    const context = pdfDoc.context;
+    const { PDFName, PDFDict, PDFArray } = await import("pdf-lib");
+    
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const annotsRef = page.node.get(PDFName.of("Annots"));
+      
+      if (!annotsRef) continue;
+      
+      const annots = context.lookup(annotsRef);
+      if (!(annots instanceof PDFArray)) continue;
+      
+      const annotCount = annots.size();
+      console.log(`📃 Page ${i + 1}: Found ${annotCount} annotations`);
+      
+      for (let j = 0; j < annotCount; j++) {
+        const annotRef = annots.get(j);
+        const annot = context.lookup(annotRef);
+        
+        if (!(annot instanceof PDFDict)) continue;
+        
+        // Get the A (Action) dictionary
+        const aRef = annot.get(PDFName.of("A"));
+        if (!aRef) continue;
+        
+        const aDict = context.lookup(aRef);
+        if (!(aDict instanceof PDFDict)) continue;
+        
+        // Get URI from the action
+        const uri = aDict.get(PDFName.of("URI"));
+        if (uri) {
+          const uriStr = uri.toString().replace(/^\(|\)$/g, "");
+          if (uriStr.startsWith("http") || uriStr.startsWith("mailto")) {
+            console.log(`   ✓ Found URL: ${uriStr}`);
+            links.push(uriStr);
+          }
+        }
+      }
+    }
+
+    console.log(`🔗 Total hyperlinks extracted: ${links.length}`);
+    return [...new Set(links)];
+  } catch (error) {
+    console.error("Failed to extract hyperlinks:", error);
+    return [];
+  }
+}
+
+/**
+ * Categorize extracted hyperlinks
+ */
+function categorizeLinks(links: string[]): {
   github: string[];
   linkedin: string | null;
   portfolio: string[];
   other: string[];
 } {
-  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
-  const allUrls = rawText.match(urlRegex) || [];
-  
   const github: string[] = [];
   const portfolio: string[] = [];
   const other: string[] = [];
   let linkedin: string | null = null;
-  
-  for (const url of allUrls) {
-    const cleanUrl = url.replace(/[.,;:!?)]+$/, ''); // Remove trailing punctuation
-    if (cleanUrl.includes('github.com')) {
-      github.push(cleanUrl);
-    } else if (cleanUrl.includes('linkedin.com')) {
-      linkedin = cleanUrl;
-    } else if (cleanUrl.includes('vercel.app') || cleanUrl.includes('netlify.app') || 
-               cleanUrl.includes('herokuapp.com') || cleanUrl.includes('railway.app') ||
-               cleanUrl.includes('render.com') || cleanUrl.includes('.io') ||
-               cleanUrl.includes('firebase') || cleanUrl.includes('surge.sh')) {
-      portfolio.push(cleanUrl);
-    } else if (!cleanUrl.includes('google.com') && !cleanUrl.includes('fonts.')) {
-      other.push(cleanUrl);
+
+  for (const url of links) {
+    if (url.includes("github.com")) {
+      github.push(url);
+    } else if (url.includes("linkedin.com")) {
+      linkedin = url;
+    } else if (
+      url.includes("vercel.app") ||
+      url.includes("netlify.app") ||
+      url.includes("herokuapp.com") ||
+      url.includes(".io") ||
+      url.includes("pages.dev")
+    ) {
+      portfolio.push(url);
+    } else if (!url.includes("google.com") && !url.includes("fonts.")) {
+      other.push(url);
     }
   }
-  
+
   return { github, linkedin, portfolio, other };
 }
 
 /**
- * Enhance extracted data with URLs found in raw text
+ * Generate summary from extracted resume data
  */
-function enhanceWithExtractedUrls(jsonData: any, rawText: string): any {
-  const urls = extractUrlsFromText(rawText);
+function generateSummary(data: any): string {
+  const parts: string[] = [];
   
-  console.log("🔗 === EXTRACTED URLs ===");
-  console.log("GitHub:", urls.github);
-  console.log("LinkedIn:", urls.linkedin);
-  console.log("Portfolio/Live:", urls.portfolio);
-  console.log("Other:", urls.other);
-  console.log("=== END URLs ===\n");
+  // Current role or education
+  if (data.workExperience?.length > 0) {
+    const exp = data.workExperience[0];
+    parts.push(`${exp.position} at ${exp.company}`);
+  } else if (data.education?.length > 0) {
+    const edu = data.education[0];
+    parts.push(`${edu.degree} student at ${edu.institution}`);
+  }
   
+  // Domain expertise from work
+  if (data.workExperience?.length > 0) {
+    const techs = data.workExperience
+      .flatMap((w: any) => w.technologies || [])
+      .slice(0, 4);
+    if (techs.length > 0) {
+      parts.push(`with expertise in ${techs.join(", ")}`);
+    }
+  }
+  
+  // Skills
+  if (data.skills?.length > 0) {
+    const allSkills = data.skills
+      .flatMap((s: any) => s.skills || [])
+      .slice(0, 5);
+    if (allSkills.length > 0) {
+      parts.push(`Proficient in ${allSkills.join(", ")}`);
+    }
+  }
+  
+  // Projects count
+  if (data.projects?.length > 0) {
+    parts.push(`Built ${data.projects.length} technical projects`);
+  }
+  
+  return parts.join(". ").replace(/\.\./g, ".") + ".";
+}
+
+/**
+ * Enhance extracted data with hyperlinks from PDF
+ */
+function enhanceWithHyperlinks(
+  jsonData: any,
+  links: { github: string[]; linkedin: string | null; portfolio: string[]; other: string[] }
+): any {
+  console.log("🔗 === EXTRACTED HYPERLINKS ===");
+  console.log("GitHub:", links.github);
+  console.log("LinkedIn:", links.linkedin);
+  console.log("Portfolio:", links.portfolio);
+  console.log("Other:", links.other);
+  console.log("=== END HYPERLINKS ===\n");
+
+  // Generate summary if empty
+  if (!jsonData.summary || jsonData.summary.trim() === "") {
+    console.log("⚠️  Summary empty - generating from data...");
+    jsonData.summary = generateSummary(jsonData);
+    console.log("✅ Generated summary:", jsonData.summary);
+  }
+
   // Enhance personalInfo with missing links
-  if (!jsonData.personalInfo.github && urls.github.length > 0) {
-    // Find the main github profile (not a repo)
-    const profileUrl = urls.github.find(u => {
-      const path = u.replace('https://github.com/', '').replace('http://github.com/', '');
-      return !path.includes('/') || path.split('/').filter(Boolean).length === 1;
+  if (!jsonData.personalInfo.github && links.github.length > 0) {
+    const profileUrl = links.github.find((u) => {
+      const path = u.replace(/https?:\/\/github\.com\//, "");
+      return !path.includes("/") || path.split("/").filter(Boolean).length === 1;
     });
     if (profileUrl) {
       jsonData.personalInfo.github = profileUrl;
     }
   }
-  
-  if (!jsonData.personalInfo.linkedIn && urls.linkedin) {
-    jsonData.personalInfo.linkedIn = urls.linkedin;
+
+  if (!jsonData.personalInfo.linkedIn && links.linkedin) {
+    jsonData.personalInfo.linkedIn = links.linkedin;
   }
-  
-  if (!jsonData.personalInfo.portfolio && urls.portfolio.length > 0) {
-    jsonData.personalInfo.portfolio = urls.portfolio[0];
+
+  if (!jsonData.personalInfo.portfolio && links.portfolio.length > 0) {
+    jsonData.personalInfo.portfolio = links.portfolio[0];
   }
-  
-  // Enhance projects with GitHub and live URLs
+
+  // Enhance projects with GitHub repos
   if (Array.isArray(jsonData.projects)) {
-    const repoUrls = urls.github.filter(u => {
-      const path = u.replace('https://github.com/', '').replace('http://github.com/', '');
-      return path.includes('/') && path.split('/').filter(Boolean).length >= 2;
+    const repoUrls = links.github.filter((u) => {
+      const path = u.replace(/https?:\/\/github\.com\//, "");
+      return path.split("/").filter(Boolean).length >= 2;
     });
-    
+
+    // Invalid URL patterns (text instead of actual URLs)
+    const invalidUrlPatterns = [
+      "project link", "live link", "demo link", "github link",
+      "link", "demo", "live", "view", "click here", "source"
+    ];
+
     jsonData.projects = jsonData.projects.map((project: any, index: number) => {
-      // Try to match GitHub repo by project name
-      if (!project.github) {
-        const projectName = (project.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const matchedRepo = repoUrls.find(url => 
-          url.toLowerCase().includes(projectName) || 
-          projectName.includes(url.split('/').pop()?.toLowerCase() || '')
-        );
-        if (matchedRepo) {
-          project.github = matchedRepo;
-        } else if (repoUrls[index]) {
-          // Fallback: assign by position if no name match
-          project.github = repoUrls[index];
+      // Clean invalid URL text
+      if (project.url) {
+        const urlLower = project.url.toLowerCase().trim();
+        if (invalidUrlPatterns.some(p => urlLower === p) || !project.url.includes(".")) {
+          delete project.url;
         }
       }
-      
-      // Try to match live URL
-      if (!project.url && urls.portfolio[index]) {
-        project.url = urls.portfolio[index];
+      if (project.github) {
+        const githubLower = project.github.toLowerCase().trim();
+        if (invalidUrlPatterns.some(p => githubLower === p) || !project.github.includes(".")) {
+          delete project.github;
+        }
       }
-      
+
+      // Assign extracted hyperlinks
+      if (!project.github && repoUrls[index]) {
+        project.github = repoUrls[index];
+      }
+      if (!project.url && links.portfolio[index]) {
+        project.url = links.portfolio[index];
+      }
       return project;
     });
   }
-  
+
   return jsonData;
 }
 
@@ -329,6 +446,12 @@ function sanitizeResumeData(data: any): any {
 export interface ParsedResume {
   rawText: string;
   pageCount: number;
+  hyperlinks: {
+    github: string[];
+    linkedin: string | null;
+    portfolio: string[];
+    other: string[];
+  };
   metadata: {
     fileName: string;
     fileSize: number;
@@ -337,39 +460,39 @@ export interface ParsedResume {
 }
 
 /**
- * Parse a PDF resume using pdf-parse
- * @param file - PDF file buffer or path
- * @param fileName - Original filename
- * @param fileSize - File size in bytes
- * @returns Parsed resume data
+ * Parse a PDF resume using pdf-parse and extract hyperlinks using pdfjs-dist
  */
 export async function parseResumePDF(
   file: Buffer | string,
   fileName: string,
-  fileSize: number,
+  fileSize: number
 ): Promise<ParsedResume> {
   try {
     let buffer: Buffer;
 
-    // Handle Buffer (from file upload) or file path
     if (Buffer.isBuffer(file)) {
       buffer = file;
     } else {
-      // Read file from path
       buffer = readFileSync(file);
     }
 
-    // Parse PDF using pdf-parse
+    // Parse text using pdf-parse
     const data = await pdf(buffer);
+
+    // Extract hyperlinks using pdfjs-dist
+    const links = await extractHyperlinks(buffer);
+    const categorizedLinks = categorizeLinks(links);
 
     console.log("\n📄 === PARSED PDF TEXT ===");
     console.log(data.text.substring(0, 2000) + (data.text.length > 2000 ? "\n... [truncated]" : ""));
     console.log("=== END PDF TEXT ===");
-    console.log(`📊 Total characters: ${data.text.length}, Pages: ${data.numpages}\n`);
+    console.log(`📊 Total characters: ${data.text.length}, Pages: ${data.numpages}`);
+    console.log(`🔗 Hyperlinks found: ${links.length}\n`);
 
     return {
       rawText: data.text.trim(),
       pageCount: data.numpages,
+      hyperlinks: categorizedLinks,
       metadata: {
         fileName,
         fileSize,
@@ -705,12 +828,11 @@ PDFs often have concatenated text. Fix spacing issues:
 - "SoftwareEngineerIntern" → "Software Engineer Intern"
 - "IndianInstituteofTechnology" → "Indian Institute of Technology"
 
-## SUMMARY (REQUIRED - MUST GENERATE)
-You MUST always generate a "summary" field. This is the ONLY field where you should infer content:
-- If resume has a summary/objective, extract and enhance it
-- If no summary exists, CREATE one from education, experience, skills, and achievements
-- Summary should be 2-3 sentences highlighting expertise, education, and key skills
-- Example: "Computer Science student at IIT with full-stack development experience. Proficient in Python, React, and cloud technologies. Strong background in competitive programming."
+## SUMMARY (REQUIRED - YOU MUST GENERATE THIS)
+You MUST generate a "summary" field with 2-3 sentences. NEVER leave it empty.
+- Combine: current role/education + years of experience + top 3-5 skills + key achievement
+- Format: "[Role/Student] with experience in [domain]. Skilled in [technologies]. [Key achievement]."
+- Example: "Backend Engineering Intern with serverless and cloud experience. Proficient in AWS, Go, Kubernetes, and distributed systems. Built scalable systems handling 250+ campaigns daily."
 
 ## PROJECTS (IMPORTANT)
 For each project, extract ALL available information:
@@ -738,6 +860,7 @@ ${rb}`;
  */
 async function extractWithOllama(
   rawText: string,
+  hyperlinks: ParsedResume["hyperlinks"],
   userFeedback?: string[]
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
   console.log(`Starting resume extraction with local Ollama (${OLLAMA_MODEL})...`);
@@ -812,8 +935,8 @@ Output valid JSON only:`;
     if (!Array.isArray(jsonData.workExperience)) jsonData.workExperience = [];
     if (!Array.isArray(jsonData.skills)) jsonData.skills = [];
     
-    // Enhance with URLs extracted directly from raw text (fallback for missed URLs)
-    jsonData = enhanceWithExtractedUrls(jsonData, rawText);
+    // Enhance with hyperlinks from PDF
+    jsonData = enhanceWithHyperlinks(jsonData, hyperlinks);
     
     console.log("✅ Ollama extraction successful");
     
@@ -837,6 +960,7 @@ Output valid JSON only:`;
  */
 async function extractWithOpenAI(
   rawText: string,
+  hyperlinks: ParsedResume["hyperlinks"],
   userFeedback?: string[]
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
   console.log(`Starting resume extraction with OpenAI (${OPENAI_MODEL})...`);
@@ -921,8 +1045,8 @@ Output valid JSON only:`
     if (!Array.isArray(jsonData.workExperience)) jsonData.workExperience = [];
     if (!Array.isArray(jsonData.skills)) jsonData.skills = [];
     
-    // Enhance with URLs extracted directly from raw text (fallback for missed URLs)
-    jsonData = enhanceWithExtractedUrls(jsonData, rawText);
+    // Enhance with hyperlinks from PDF
+    jsonData = enhanceWithHyperlinks(jsonData, hyperlinks);
     
     // Sanitize data to prevent validation errors
     jsonData = sanitizeResumeData(jsonData);
@@ -943,20 +1067,18 @@ Output valid JSON only:`
 
 /**
  * Extract structured resume data - automatically switches between Ollama and OpenAI
- * @param rawText - The raw text extracted from the PDF
- * @param userFeedback - Optional user feedback to improve parsing
- * @returns Structured resume data conforming to IResume interface
  */
 export async function extractResumeFields(
   rawText: string,
+  hyperlinks: ParsedResume["hyperlinks"],
   userFeedback?: string[]
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
   if (USE_LOCAL_OLLAMA) {
     console.log(`Using local Ollama (${OLLAMA_MODEL}) for resume parsing`);
-    return extractWithOllama(rawText, userFeedback);
+    return extractWithOllama(rawText, hyperlinks, userFeedback);
   } else {
     console.log(`Using OpenAI (${OPENAI_MODEL}) for resume parsing`);
-    return extractWithOpenAI(rawText, userFeedback);
+    return extractWithOpenAI(rawText, hyperlinks, userFeedback);
   }
 }
 
@@ -984,7 +1106,7 @@ export async function parseAndExtractResume(
 
   console.log("🤖 Extracting structured data...");
   // Step 2: Extract structured fields using LLM
-  const structuredData = await extractResumeFields(rawData.rawText, userFeedback);
+  const structuredData = await extractResumeFields(rawData.rawText, rawData.hyperlinks, userFeedback);
 
   // Add file metadata
   structuredData.fileUrl = fileName;

@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 // POST /api/jobs/[id]/apply - Apply to a job
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     // Check authentication
@@ -25,7 +25,7 @@ export async function POST(
 
     await connectToDatabase();
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
