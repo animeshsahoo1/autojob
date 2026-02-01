@@ -27,6 +27,7 @@
 import { JobApplyAgentState } from "../state";
 import { connectToDatabase } from "@/database/db";
 import { ApplyQueue } from "@/models/applyqueue.model";
+import { AgentRun } from "@/models/agentrun.model";
 import { Job, IJob } from "@/models/job.model";
 import { User, IUser } from "@/models/user.model";
 import { Resume, IResume } from "@/models/resume.model";
@@ -44,8 +45,13 @@ function mapSkipReason(
   | "MISSING_EVIDENCE"
   | "COMPANY_COOLDOWN"
   | "DUPLICATE"
-  | "KILL_SWITCH" {
+  | "KILL_SWITCH"
+  | "LOCATION_MISMATCH"
+  | "REMOTE_ONLY_MISMATCH" {
   if (reasonText.includes("LOW_MATCH_SCORE")) return "LOW_MATCH_SCORE";
+  if (reasonText.includes("LOCATION_MISMATCH")) return "LOCATION_MISMATCH";
+  if (reasonText.includes("REMOTE_ONLY_MISMATCH"))
+    return "REMOTE_ONLY_MISMATCH";
   if (
     reasonText.includes("BLOCKED_COMPANY") ||
     reasonText.includes("BLOCKED_ROLE")
@@ -66,6 +72,19 @@ export async function queueDecisionNode(
   const errors: string[] = [];
 
   try {
+    // Check kill switch before processing
+    const agentRun = await AgentRun.findById(state.agentRunId);
+    if (agentRun?.killSwitch || agentRun?.status !== "RUNNING") {
+      console.log(
+        `[QueueDecisionNode] ⏹️ Kill switch activated. Stopping workflow.`,
+      );
+      return {
+        stopRequested: true,
+        runStatus: "STOPPED",
+        lastCheckpoint: "QUEUE_DECISION_STOPPED",
+      };
+    }
+
     // Validate required state
     if (!state.policyState) {
       throw new Error("Policy state not loaded. Run JobDiscoveryNode first.");

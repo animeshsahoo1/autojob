@@ -26,6 +26,7 @@
 import { JobApplyAgentState, StudentProfile } from "../state";
 import { connectToDatabase } from "@/database/db";
 import { User, IUser } from "@/models/user.model";
+import { AgentRun } from "@/models/agentrun.model";
 import Resume, { IResume } from "@/models/resume.model";
 
 export async function artifactNode(
@@ -36,6 +37,19 @@ export async function artifactNode(
   const errors: string[] = [];
 
   try {
+    // Check kill switch before processing
+    const agentRun = await AgentRun.findById(state.agentRunId);
+    if (agentRun?.killSwitch || agentRun?.status !== "RUNNING") {
+      console.log(
+        `[ArtifactNode] ⏹️ Kill switch activated. Stopping workflow.`,
+      );
+      return {
+        stopRequested: true,
+        runStatus: "STOPPED",
+        lastCheckpoint: "ARTIFACT_STOPPED",
+      };
+    }
+
     // 1. Fetch User by userId
     const user = (await User.findById(state.userId).lean()) as IUser | null;
     if (!user) {
