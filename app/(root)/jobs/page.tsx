@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Briefcase, MapPin, Building2, Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Briefcase, MapPin, Building2, Clock, Send, ExternalLink } from "lucide-react";
 
 interface Job {
   _id: string;
@@ -12,10 +18,13 @@ interface Job {
   description: string;
   skills: string[];
   employmentType?: string;
+  requirements?: string[];
+  source?: string;
   createdAt: string;
 }
 
 export default function JobsPage() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
@@ -61,92 +70,141 @@ export default function JobsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading jobs...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Spinner />
+          <span>Loading jobs...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white py-12 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Available Jobs</h1>
-          <p className="text-gray-400">{jobs.length} positions found</p>
+          <h1 className="text-3xl font-bold text-foreground">Browse Jobs</h1>
+          <p className="text-muted-foreground mt-1">
+            {jobs.length} position{jobs.length !== 1 ? "s" : ""} available
+          </p>
         </div>
 
-        <div className="space-y-4">
+        <Separator className="mb-8" />
+
+        {/* Job Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {jobs.map((job) => (
-            <div
-              key={job._id}
-              className="bg-gray-900 border border-gray-800 rounded-lg p-6 hover:border-blue-500/50 transition-all"
+            <Card 
+              key={job._id} 
+              className="hover:bg-accent/50 transition-colors cursor-pointer flex flex-col h-full"
+              onClick={() => router.push(`/jobs/${job._id}`)}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h2 className="text-2xl font-semibold mb-2">{job.title}</h2>
-                  <div className="flex flex-wrap gap-4 text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      <span>{job.company}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>
-                        {job.location}
-                        {job.isRemote && " (Remote)"}
-                      </span>
-                    </div>
-                    {job.employmentType && (
-                      <div className="flex items-center gap-2">
-                        <Briefcase className="w-4 h-4" />
-                        <span className="capitalize">{job.employmentType}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      <span>{new Date(job.createdAt).toLocaleDateString()}</span>
-                    </div>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                    <Briefcase className="h-5 w-5 text-primary" />
                   </div>
-                </div>
-                <button
-                  onClick={() => handleApply(job._id)}
-                  disabled={applying === job._id}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
-                >
-                  {applying === job._id ? "Applying..." : "Auto Apply"}
-                </button>
-              </div>
-
-              <p className="text-gray-300 mb-4 line-clamp-3">
-                {job.description}
-              </p>
-
-              {job.skills.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {job.skills.slice(0, 8).map((skill, idx) => (
-                    <span
-                      key={idx}
-                      className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-sm"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                  {job.skills.length > 8 && (
-                    <span className="px-3 py-1 text-gray-400 text-sm">
-                      +{job.skills.length - 8} more
-                    </span>
+                  {job.source && (
+                    <Badge variant="outline" className="text-xs">
+                      {job.source}
+                    </Badge>
                   )}
                 </div>
-              )}
-            </div>
+                <CardTitle className="text-lg line-clamp-2">{job.title}</CardTitle>
+                <CardDescription className="space-y-1.5 mt-2">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Building2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{job.company}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {job.location}
+                      {job.isRemote && " (Remote)"}
+                    </span>
+                  </div>
+                  {job.employmentType && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span className="capitalize">{job.employmentType}</span>
+                    </div>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0 flex-1 flex flex-col justify-between">
+                <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+                  {job.description}
+                </p>
+
+                <div className="space-y-3">
+                  {job.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {job.skills.slice(0, 4).map((skill, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {skill}
+                        </Badge>
+                      ))}
+                      {job.skills.length > 4 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{job.skills.length - 4}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/jobs/${job._id}`);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApply(job._id);
+                      }}
+                      disabled={applying === job._id}
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                    >
+                      {applying === job._id ? (
+                        <>
+                          <Spinner className="h-3.5 w-3.5" />
+                          Applying...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-3.5 w-3.5" />
+                          Apply
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
+        {/* Empty State */}
         {jobs.length === 0 && (
-          <div className="text-center py-12">
-            <Briefcase className="w-16 h-16 mx-auto text-gray-600 mb-4" />
-            <p className="text-gray-400 text-xl">No jobs available yet</p>
-          </div>
+          <Card>
+            <CardContent className="pt-12 pb-12 text-center">
+              <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No jobs available</h3>
+              <p className="text-muted-foreground">
+                Check back later for new opportunities
+              </p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
