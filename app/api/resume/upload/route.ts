@@ -1,0 +1,96 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { parseResumePDF } from "@/lib/pdf-parser";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+// POST /api/resume/upload
+export async function POST(request: NextRequest) {
+  try {
+    // Check authentication
+    const session = await auth();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Unauthorized - Please sign in",
+        },
+        { status: 401 },
+      );
+    }
+
+    // Get form data
+    const formData = await request.formData();
+    const file = formData.get("resume") as File;
+
+    if (!file) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No file uploaded",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate file type
+    if (file.type !== "application/pdf") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Only PDF files are allowed",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate file size (10MB max)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "File size must be less than 10MB",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    console.log(`Parsing resume for user ${session.user.id}: ${file.name}`);
+
+    // Parse the PDF using LangChain
+    const parsedResume = await parseResumePDF(buffer, file.name, file.size);
+
+    // TODO: Store parsed resume in database
+    // TODO: Extract structured data (skills, education, experience)
+    // For now, just return the parsed text
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        fileName: parsedResume.metadata.fileName,
+        fileSize: parsedResume.metadata.fileSize,
+        pageCount: parsedResume.pageCount,
+        textPreview: parsedResume.rawText.substring(0, 500) + "...",
+        rawText: parsedResume.rawText, // Full text for processing
+        uploadedAt: parsedResume.metadata.uploadedAt,
+      },
+      message: "Resume uploaded and parsed successfully",
+    });
+  } catch (error) {
+    console.error("Resume upload error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to process resume",
+        message: (error as Error).message,
+      },
+      { status: 500 },
+    );
+  }
+}
