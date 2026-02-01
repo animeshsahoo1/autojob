@@ -51,6 +51,9 @@ export interface IUser {
   studentProfile?: StudentProfile;
   resumeArtifacts?: ResumeArtifacts;
 
+  // Resume reference
+  resumeId?: mongoose.Types.ObjectId;
+
   applyPolicy?: ApplyPolicy;
 
   lastRunAt?: Date;
@@ -122,6 +125,12 @@ const userSchema = new Schema<IUser>(
       ],
       bulletBank: [String],
       proofLinks: [String],
+    },
+
+    resumeId: {
+      type: Schema.Types.ObjectId,
+      ref: "Resume",
+      index: true,
     },
 
     applyPolicy: {

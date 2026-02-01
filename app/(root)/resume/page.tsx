@@ -9,12 +9,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import ResumeEditForm from "@/components/ResumeEditForm";
 
 export default function OnboardingPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<any>(null);
+  const [showEditor, setShowEditor] = useState(false);
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,12 +66,43 @@ export default function OnboardingPage() {
 
       setResult(data.data);
       console.log("Parsed resume:", data.data);
+      
+      // Show editor after successful parsing
+      if (data.data.extractedData) {
+        setShowEditor(true);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setUploading(false);
     }
   };
+
+  const handleSaveComplete = () => {
+    router.push("/dashboard");
+  };
+
+  if (showEditor && result?.extractedData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white pt-20 pb-12">
+        <div className="relative max-w-5xl mx-auto px-4">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-3">Edit Your Resume</h1>
+            <p className="text-gray-400 text-lg">
+              Review and edit the extracted information
+            </p>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <ResumeEditForm 
+              initialData={result.extractedData} 
+              onSave={handleSaveComplete}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white pt-20">
@@ -136,24 +169,241 @@ export default function OnboardingPage() {
 
             {/* Success Result */}
             {result && (
-              <div className="bg-green-500/10 border border-green-500/50 text-green-300 px-4 py-4 rounded-lg space-y-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <p className="font-semibold">Resume parsed successfully!</p>
-                </div>
-                <div className="text-sm space-y-1 text-green-200/80">
-                  <p>• Pages: {result.pageCount}</p>
-                  <p>• Size: {(result.fileSize / 1024).toFixed(2)} KB</p>
-                  <p>• Characters extracted: {result.rawText.length}</p>
-                </div>
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm font-medium hover:text-green-200">
-                    View preview
-                  </summary>
-                  <div className="mt-2 p-3 bg-black/20 rounded text-xs font-mono overflow-auto max-h-40">
-                    {result.textPreview}
+              <div className="space-y-4">
+                {/* Summary Card */}
+                <div className="bg-green-500/10 border border-green-500/50 text-green-300 px-4 py-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <p className="font-semibold">Resume parsed successfully!</p>
                   </div>
-                </details>
+                  <div className="text-sm space-y-1 text-green-200/80">
+                    <p>• Pages: {result.pageCount}</p>
+                    <p>• Size: {(result.fileSize / 1024).toFixed(2)} KB</p>
+                  </div>
+                </div>
+
+                {/* Extracted Data */}
+                {result.extractedData && (
+                  <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-semibold text-blue-300 mb-3">
+                      📋 Extracted Information
+                    </h3>
+
+                    {/* Personal Info */}
+                    {result.extractedData.personalInfo && (
+                      <div className="bg-black/20 rounded-lg p-3">
+                        <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                          Personal Information
+                        </h4>
+                        <div className="text-sm space-y-1 text-gray-300">
+                          <p>
+                            <strong>Name:</strong>{" "}
+                            {result.extractedData.personalInfo.fullName}
+                          </p>
+                          <p>
+                            <strong>Email:</strong>{" "}
+                            {result.extractedData.personalInfo.email}
+                          </p>
+                          {result.extractedData.personalInfo.phone && (
+                            <p>
+                              <strong>Phone:</strong>{" "}
+                              {result.extractedData.personalInfo.phone}
+                            </p>
+                          )}
+                          {result.extractedData.personalInfo.linkedIn && (
+                            <p>
+                              <strong>LinkedIn:</strong>{" "}
+                              <a
+                                href={result.extractedData.personalInfo.linkedIn}
+                                className="text-blue-400 hover:underline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {result.extractedData.personalInfo.linkedIn}
+                              </a>
+                            </p>
+                          )}
+                          {result.extractedData.personalInfo.github && (
+                            <p>
+                              <strong>GitHub:</strong>{" "}
+                              <a
+                                href={result.extractedData.personalInfo.github}
+                                className="text-blue-400 hover:underline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {result.extractedData.personalInfo.github}
+                              </a>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Education */}
+                    {result.extractedData.education &&
+                      result.extractedData.education.length > 0 && (
+                        <div className="bg-black/20 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                            🎓 Education ({result.extractedData.education.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {result.extractedData.education.map(
+                              (edu: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm text-gray-300 border-l-2 border-blue-500/30 pl-3"
+                                >
+                                  <p className="font-medium">{edu.degree}</p>
+                                  <p className="text-gray-400">
+                                    {edu.institution}
+                                    {edu.major && ` • ${edu.major}`}
+                                  </p>
+                                  {edu.gpa && (
+                                    <p className="text-xs text-gray-500">
+                                      GPA: {edu.gpa}
+                                      {edu.maxGpa && `/${edu.maxGpa}`}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Work Experience */}
+                    {result.extractedData.workExperience &&
+                      result.extractedData.workExperience.length > 0 && (
+                        <div className="bg-black/20 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                            💼 Work Experience (
+                            {result.extractedData.workExperience.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {result.extractedData.workExperience.map(
+                              (exp: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm text-gray-300 border-l-2 border-purple-500/30 pl-3"
+                                >
+                                  <p className="font-medium">{exp.position}</p>
+                                  <p className="text-gray-400">
+                                    {exp.company}
+                                    {exp.location && ` • ${exp.location}`}
+                                  </p>
+                                  {exp.technologies &&
+                                    exp.technologies.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {exp.technologies
+                                          .slice(0, 5)
+                                          .map((tech: string, i: number) => (
+                                            <span
+                                              key={i}
+                                              className="text-xs bg-purple-500/20 px-2 py-0.5 rounded"
+                                            >
+                                              {tech}
+                                            </span>
+                                          ))}
+                                        {exp.technologies.length > 5 && (
+                                          <span className="text-xs text-gray-500">
+                                            +{exp.technologies.length - 5} more
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Skills */}
+                    {result.extractedData.skills &&
+                      result.extractedData.skills.length > 0 && (
+                        <div className="bg-black/20 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                            🚀 Skills
+                          </h4>
+                          <div className="space-y-2">
+                            {result.extractedData.skills.map(
+                              (skillGroup: any, idx: number) => (
+                                <div key={idx} className="text-sm">
+                                  <p className="font-medium text-gray-300 mb-1">
+                                    {skillGroup.category}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {skillGroup.skills.map(
+                                      (skill: string, i: number) => (
+                                        <span
+                                          key={i}
+                                          className="text-xs bg-blue-500/20 text-blue-200 px-2 py-1 rounded"
+                                        >
+                                          {skill}
+                                        </span>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Projects */}
+                    {result.extractedData.projects &&
+                      result.extractedData.projects.length > 0 && (
+                        <div className="bg-black/20 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                            🛠️ Projects ({result.extractedData.projects.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {result.extractedData.projects.map(
+                              (project: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm text-gray-300 border-l-2 border-green-500/30 pl-3"
+                                >
+                                  <p className="font-medium">{project.name}</p>
+                                  {project.description && (
+                                    <p className="text-xs text-gray-400">
+                                      {project.description}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Summary */}
+                    {result.extractedData.summary && (
+                      <div className="bg-black/20 rounded-lg p-3">
+                        <h4 className="text-sm font-semibold text-blue-200 mb-2">
+                          📝 Summary
+                        </h4>
+                        <p className="text-sm text-gray-300">
+                          {result.extractedData.summary}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Raw JSON Preview */}
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-sm font-medium text-blue-200 hover:text-blue-100">
+                        View full JSON data
+                      </summary>
+                      <div className="mt-2 p-3 bg-black/40 rounded text-xs font-mono overflow-auto max-h-60">
+                        <pre>
+                          {JSON.stringify(result.extractedData, null, 2)}
+                        </pre>
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
             )}
 

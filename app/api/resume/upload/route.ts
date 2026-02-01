@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { parseResumePDF } from "@/lib/pdf-parser";
+import { parseAndExtractResume } from "@/lib/agent/pdf-parser";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -63,22 +63,31 @@ export async function POST(request: NextRequest) {
 
     console.log(`Parsing resume for user ${session.user.id}: ${file.name}`);
 
-    // Parse the PDF using LangChain
-    const parsedResume = await parseResumePDF(buffer, file.name, file.size);
+    // Parse the PDF and extract structured data using LangChain + Ollama
+    console.log("Step 1: Extracting text from PDF...");
+    const { rawData, structuredData } = await parseAndExtractResume(
+      buffer,
+      file.name,
+      file.size
+    );
 
-    // TODO: Store parsed resume in database
-    // TODO: Extract structured data (skills, education, experience)
-    // For now, just return the parsed text
+    console.log("✅ Resume extraction completed successfully");
+
+    // TODO: Store parsed resume in database with userId
+    // await Resume.create({ ...structuredData, userId: session.user.id });
 
     return NextResponse.json({
       success: true,
       data: {
-        fileName: parsedResume.metadata.fileName,
-        fileSize: parsedResume.metadata.fileSize,
-        pageCount: parsedResume.pageCount,
-        textPreview: parsedResume.rawText.substring(0, 500) + "...",
-        rawText: parsedResume.rawText, // Full text for processing
-        uploadedAt: parsedResume.metadata.uploadedAt,
+        // Raw data
+        fileName: rawData.metadata.fileName,
+        fileSize: rawData.metadata.fileSize,
+        pageCount: rawData.pageCount,
+        textPreview: rawData.rawText.substring(0, 500) + "...",
+        uploadedAt: rawData.metadata.uploadedAt,
+        
+        // Structured extracted data
+        extractedData: structuredData,
       },
       message: "Resume uploaded and parsed successfully",
     });
