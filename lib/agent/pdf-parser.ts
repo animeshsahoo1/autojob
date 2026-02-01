@@ -557,12 +557,39 @@ async function extractWithOllama(
 CRITICAL RULES:
 1. Output ONLY the JSON object, no explanations or markdown
 2. ONLY extract information that is EXPLICITLY written in the resume
-3. DO NOT infer, guess, or fill in missing information
-4. If a field is not present, leave it empty or omit it
+3. DO NOT infer, guess, or fill in missing information EXCEPT for the summary (which MUST be generated)
 5. Email must be valid format (e.g., user@domain.com)
 6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
 7. For current positions, use empty string for endDate, NOT "Present"
-8. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
+8. Arrays cannot be empty - include at least [] for empty arrays
+9. ALWAYS generate a summary - this is CRITICAL and REQUIRED
+10. FIX TEXT SPACING: Add proper spaces between concatenated words (e.g., "AyushKumar" → "Ayush Kumar", "SoftwareEngineerIntern" → "Software Engineer Intern")${feedbackInstructions}
+
+IMPORTANT - TEXT SPACING (CRITICAL):
+- Many PDFs have concatenated text without spaces
+- You MUST add proper spaces between words in ALL fields
+- Examples: "IndianInstituteofTechnology" → "Indian Institute of Technology"
+- "BachelorofTechnology" → "Bachelor of Technology"
+- "SoftwareEngineerIntern" → "Software Engineer Intern"
+- "GitHubActions" → "GitHub Actions"
+- Apply this to ALL text fields: names, companies, institutions, skills, achievements, etc.
+
+IMPORTANT - SUMMARY (MUST GENERATE):
+- You MUST ALWAYS generate a "summary" field - this is MANDATORY
+- If a summary/objective is present in the resume, extract and enhance it
+- If no summary exists, CREATE one from work experience, education, skills, and achievements
+- This is the ONLY field where you MUST infer and generate content
+- The summary should be 2-3 sentences highlighting key expertise, education level, and main skills
+- Example: "Computer Science student at IIT Dhanbad with experience in full-stack development and cloud infrastructure. Proficient in Golang, Python, and modern web technologies. Strong background in competitive programming and cybersecurity."
+- NEVER leave summary empty - it is REQUIRED in every case
+
+IMPORTANT - DESCRIPTIONS (CRITICAL):
+- For work experience: ALWAYS extract or create a "description" field summarizing the role
+- For projects: ALWAYS extract or create a "description" field explaining what the project does
+- If no explicit description exists, combine bullet points/achievements into a concise 1-2 sentence description
+- Example work description: "Contributed to travel booking platform integrating third-party APIs with Node.js backend and Next.js frontend"
+- Example project description: "Real-time multiplayer game platform built with WebSockets, featuring lobby system and matchmaking"
+- Descriptions should be clear, concise, and informative - NEVER leave them empty if any information exists
 
 IMPORTANT DATE FORMATTING:
 - Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
@@ -575,9 +602,9 @@ Extract the following structure:
   "personalInfo": { "fullName": string, "email": string, "phone": string, "linkedIn": string, "github": string, "portfolio": string },
   "summary": string,
   "education": [{ "institution": string, "degree": string, "major": string, "gpa": number, "startDate": string, "endDate": string }],
-  "workExperience": [{ "company": string, "position": string, "startDate": string, "endDate": string, "responsibilities": [string], "achievements": [string], "technologies": [string] }],
+  "workExperience": [{ "company": string, "position": string, "description": string (REQUIRED), "startDate": string, "endDate": string, "responsibilities": [string], "achievements": [string], "technologies": [string] }],
   "skills": [{ "category": string, "skills": [string] }],
-  "projects": [{ "name": string, "description": string, "role": string, "startDate": string, "endDate": string, "technologies": [string], "achievements": [string], "highlights": [string], "url": string, "github": string, "teamSize": number }],
+  "projects": [{ "name": string, "description": string (REQUIRED), "role": string, "technologies": [string], "url": string, "github": string }],
   "certifications": [{ "name": string, "issuer": string, "issueDate": string }]
 }
 
@@ -703,12 +730,40 @@ async function extractWithOpenAI(
 CRITICAL RULES:
 1. Output ONLY the JSON object, no explanations or markdown
 2. ONLY extract information that is EXPLICITLY written in the resume
-3. DO NOT infer, guess, or fill in missing information
+3. DO NOT infer, guess, or fill in missing information EXCEPT for the summary (which MUST be generated)
 4. If a field is not present, leave it empty or omit it
 5. Email must be valid format (e.g., user@domain.com)
 6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
 7. For current positions, use empty string for endDate, NOT "Present"
-8. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
+8. Arrays cannot be empty - include at least [] for empty arrays
+9. ALWAYS generate a summary - this is CRITICAL and REQUIRED
+10. FIX TEXT SPACING: Add proper spaces between concatenated words (e.g., "AyushKumar" → "Ayush Kumar", "SoftwareEngineerIntern" → "Software Engineer Intern")${feedbackInstructions}
+
+IMPORTANT - TEXT SPACING (CRITICAL):
+- Many PDFs have concatenated text without spaces
+- You MUST add proper spaces between words in ALL fields
+- Examples: "IndianInstituteofTechnology" → "Indian Institute of Technology"
+- "BachelorofTechnology" → "Bachelor of Technology"
+- "SoftwareEngineerIntern" → "Software Engineer Intern"
+- "GitHubActions" → "GitHub Actions"
+- Apply this to ALL text fields: names, companies, institutions, skills, achievements, etc.
+
+IMPORTANT - SUMMARY (MUST GENERATE):
+- You MUST ALWAYS generate a "summary" field - this is MANDATORY
+- If a summary/objective is present in the resume, extract and enhance it
+- If no summary exists, CREATE one from work experience, education, skills, and achievements
+- This is the ONLY field where you MUST infer and generate content
+- The summary should be 2-3 sentences highlighting key expertise, education level, and main skills
+- Example: "Computer Science student at IIT Dhanbad with experience in full-stack development and cloud infrastructure. Proficient in Golang, Python, and modern web technologies. Strong background in competitive programming and cybersecurity."
+- NEVER leave summary empty - it is REQUIRED in every case
+
+IMPORTANT - DESCRIPTIONS (CRITICAL):
+- For work experience: ALWAYS extract or create a "description" field summarizing the role
+- For projects: ALWAYS extract or create a "description" field explaining what the project does
+- If no explicit description exists, combine bullet points/achievements into a concise 1-2 sentence description
+- Example work description: "Contributed to travel booking platform integrating third-party APIs with Node.js backend and Next.js frontend"
+- Example project description: "Real-time multiplayer game platform built with WebSockets, featuring lobby system and matchmaking"
+- Descriptions should be clear, concise, and informative - NEVER leave them empty if any information exists
 
 IMPORTANT DATE FORMATTING:
 - Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
