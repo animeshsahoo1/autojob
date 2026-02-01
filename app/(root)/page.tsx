@@ -39,21 +39,29 @@ export default async function Home() {
             applications, and personalized resumes—all on autopilot.
           </p>
 
-          {/* CTA Button */}
-          <div className="pt-8">
+          {/* CTA Buttons */}
+          <div className="pt-8 flex flex-col sm:flex-row gap-4 items-center justify-center">
             <Link
-              href={session?.user?.id ? "/dashboard" : "/sign-in"}
+              href="/jobs"
               className="group relative inline-flex items-center gap-3 px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/50"
             >
-              <span className="relative z-10">
-                {session?.user?.id ? "Go to Dashboard" : "Get Started"}
-              </span>
-              <ArrowRight className="relative z-10 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <span className="relative z-10">View Jobs</span>
+              <Briefcase className="relative z-10 w-5 h-5" />
               <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </Link>
 
+            <Link
+              href={session?.user?.id ? "/dashboard" : "/sign-in"}
+              className="group relative inline-flex items-center gap-3 px-8 py-4 text-lg font-semibold text-white border-2 border-white/20 rounded-full overflow-hidden transition-all hover:scale-105 hover:border-blue-500/50"
+            >
+              <span className="relative z-10">
+                {session?.user?.id ? "Dashboard" : "Sign In"}
+              </span>
+              <ArrowRight className="relative z-10 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+
             {!session?.user?.id && (
-              <p className="mt-4 text-sm text-gray-500 text-center">
+              <p className="mt-4 text-sm text-gray-500 text-center w-full">
                 No credit card required • Get started in 2 minutes
               </p>
             )}

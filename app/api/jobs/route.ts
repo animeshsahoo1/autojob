@@ -1,69 +1,88 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/database/db";
 import { Job } from "@/models/job.model";
+import { Application } from "@/models/application.model";
+import { auth } from "@/auth";
+import mongoose from "mongoose";
 
-// GET /api/jobs - Get all job postings
-export async function GET(request: NextRequest) {
+// GET /api/jobs - Get all jobs
+export async function GET() {
   try {
     await connectToDatabase();
-
-    const { searchParams } = new URL(request.url);
-
-    // Query parameters for filtering
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const company = searchParams.get("company");
-    const location = searchParams.get("location");
-    const isRemote = searchParams.get("isRemote");
-    const employmentType = searchParams.get("employmentType");
-    const skills = searchParams.get("skills"); // comma-separated
-
-    // Build filter query
-    const filter: any = {};
-
-    if (company) filter.company = { $regex: company, $options: "i" };
-    if (location) filter.location = { $regex: location, $options: "i" };
-    if (isRemote === "true") filter.isRemote = true;
-    if (employmentType) filter.employmentType = employmentType;
-    if (skills) {
-      const skillsArray = skills.split(",").map((s) => s.trim());
-      filter.skills = { $in: skillsArray };
-    }
-
-    const skip = (page - 1) * limit;
-
-    // Get jobs with pagination
-    const jobs = await Job.find(filter)
-      .select("-__v") // Exclude version field
+    
+    const jobs = await Job.find()
+      .select("-__v")
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
+      .limit(100)
       .lean();
-
-    const totalJobs = await Job.countDocuments(filter);
-    const totalPages = Math.ceil(totalJobs / limit);
 
     return NextResponse.json({
       success: true,
-      data: {
-        jobs,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalJobs,
-          limit,
-          hasMore: page < totalPages,
-        },
-      },
+      jobs,
     });
   } catch (error) {
     console.error("Error fetching jobs:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch jobs",
-        message: (error as Error).message,
-      },
+      { success: false, error: "Failed to fetch jobs" },
+      { status: 500 },
+    );
+  }
+}
+
+// POST /api/jobs - Auto apply to a job
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: "Please sign in" },
+        { status: 401 },
+      );
+    }
+
+    await connectToDatabase();
+
+    const { jobId } = await request.json();
+
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid job ID" },
+        { status: 400 },
+      );
+    }
+
+    const job = await Job.findById(jobId);
+    if (!job) {
+      return NextResponse.json(
+        { success: false, error: "Job not found" },
+        { status: 404 },
+      );
+    }
+
+    // Create application
+    const application = await Application.create({
+      jobId: new mongoose.Types.ObjectId(jobId),
+      userId: new mongoose.Types.ObjectId(session.user.id),
+      agentRunId: new mongoose.Types.ObjectId(),
+      resumeVariantUsed: "base",
+      status: "SUBMITTED",
+      attempts: 1,
+      timeline: [{
+        stage: "SUBMITTED",
+        timestamp: new Date(),
+        message: "Application submitted successfully"
+      }]
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Applied to ${job.title} at ${job.company}`,
+      applicationId: application._id,
+    });
+  } catch (error) {
+    console.error("Error applying to job:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to apply" },
       { status: 500 },
     );
   }
