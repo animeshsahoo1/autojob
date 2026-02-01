@@ -17,6 +17,16 @@ export interface IApplyQueue {
     | "DUPLICATE"
     | "KILL_SWITCH";
 
+  // AI-generated analysis for skipped jobs
+  skipReasoning?: string;
+  missingSkills?: string[];
+  missingExperience?: string[];
+  suggestions?: {
+    skillsToLearn: string[];
+    projectsToAdd: string[];
+    resumeImprovements: string[];
+  };
+
   cooldownUntil?: Date;
 
   queuedAt: Date;
@@ -68,6 +78,35 @@ const applyQueueSchema = new Schema<IApplyQueue>(
       ],
     },
 
+    skipReasoning: {
+      type: String,
+    },
+
+    missingSkills: {
+      type: [String],
+      default: [],
+    },
+
+    missingExperience: {
+      type: [String],
+      default: [],
+    },
+
+    suggestions: {
+      skillsToLearn: {
+        type: [String],
+        default: [],
+      },
+      projectsToAdd: {
+        type: [String],
+        default: [],
+      },
+      resumeImprovements: {
+        type: [String],
+        default: [],
+      },
+    },
+
     cooldownUntil: {
       type: Date,
     },
@@ -81,7 +120,7 @@ const applyQueueSchema = new Schema<IApplyQueue>(
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const ApplyQueue =
