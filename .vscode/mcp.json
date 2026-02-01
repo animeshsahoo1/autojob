@@ -1,10 +1,11 @@
 {
   "servers": {
     "shadcn": {
-      "command": "npx",
+      "command": "/bin/bash",
       "args": [
-        "shadcn@latest",
-        "mcp"
+        "-l",
+        "-c",
+        "npx shadcn@latest mcp"
       ]
     }
   }
