@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
     // Store resume in vector database for semantic search
     try {
       const vectorResult = await storeResumeInVectorDB(
-        userId,
-        savedResume._id,
+        userId.toString(),
+        savedResume._id.toString(),
         savedResume.toObject()
       );
       

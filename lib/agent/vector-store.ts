@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { IResume } from "@/models/resume.model";
 import { QdrantClient } from "@qdrant/qdrant-js";
+import { randomUUID } from "crypto";
 
 // Configuration: Switch between local Ollama and OpenAI
 const USE_LOCAL_OLLAMA = false;
@@ -312,15 +313,20 @@ export async function storeResumeInVectorDB(
     }
 
     // Delete existing embeddings for this resume (if updating)
-    await client.delete(COLLECTION_NAME, {
-      filter: {
-        must: [
-          { key: "userId", match: { value: userId } },
-          { key: "resumeId", match: { value: resumeId } },
-        ],
-      },
-    });
-    console.log("Deleted existing embeddings");
+    try {
+      await client.delete(COLLECTION_NAME, {
+        filter: {
+          must: [
+            { key: "userId", match: { value: userId } },
+            { key: "resumeId", match: { value: resumeId } },
+          ],
+        },
+      });
+      console.log("Deleted existing embeddings");
+    } catch (deleteError) {
+      // Ignore delete errors (collection might be empty or points don't exist)
+      console.log("Skip delete (no existing embeddings or collection empty)");
+    }
 
     // Generate embeddings and store
     const points = [];
@@ -331,8 +337,8 @@ export async function storeResumeInVectorDB(
       // Generate embedding for this chunk
       const embedding = await generateEmbedding(chunk.text);
       
-      // Create unique ID for this point
-      const pointId = `${userId}_${resumeId}_${chunk.index}`;
+      // Create unique UUID for this point (Qdrant requires UUID or integer IDs)
+      const pointId = randomUUID();
       
       points.push({
         id: pointId,
@@ -423,12 +429,12 @@ export async function searchResumeEmbeddings(
 export async function deleteResumeEmbeddings(
   userId: string,
   resumeId: string
-): Promise<{ success: boolean; deletedCount?: number }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getQdrantClient();
 
     // Delete points matching userId and resumeId
-    const result = await client.delete(COLLECTION_NAME, {
+    await client.delete(COLLECTION_NAME, {
       filter: {
         must: [
           { key: "userId", match: { value: userId } },
