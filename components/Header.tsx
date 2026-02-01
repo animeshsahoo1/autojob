@@ -31,9 +31,7 @@ const Header = () => {
   }, []);
 
   return (
-    <header
-      className="sticky top-0 left-0 right-0 z-50 bg-neutral-950 border-b border-neutral-800"
-    >
+    <header className="sticky top-0 left-0 right-0 z-50 bg-neutral-950 border-b border-neutral-800">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-4 flex items-center justify-between">
         {/* LOGO SECTION */}
         <Link
@@ -65,6 +63,15 @@ const Header = () => {
                     className="w-full px-4 py-2 cursor-pointer text-left text-white hover:bg-neutral-800 transition-colors"
                   >
                     Dashboard
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfileDropdown(false);
+                      navigate("/applied");
+                    }}
+                    className="w-full px-4 py-2 cursor-pointer text-left text-white hover:bg-neutral-800 transition-colors"
+                  >
+                    Applied Jobs
                   </button>
                   <button
                     onClick={async () => {

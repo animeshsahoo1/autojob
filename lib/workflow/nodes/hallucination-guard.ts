@@ -237,7 +237,7 @@ Return:
     });
 
     // Block workflow only if LLM says it's not grounded
-    if (!validationPassed) {
+    if (!validationResult.isGrounded) {
       console.log(
         `[HallucinationGuard] ❌ BLOCKED - LLM flagged critical issues`,
       );
@@ -266,8 +266,6 @@ Return:
         isGrounded: true,
         hallucinationRisks: validationResult.hallucinationRisks,
         confidenceScore: validationResult.confidenceScore,
-        hallucinationRisks: [],
-        confidenceScore: finalConfidenceScore,
         validationPassed: true,
       },
       lastCheckpoint: "VALIDATION_PASSED",
