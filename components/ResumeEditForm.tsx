@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Save, Plus, Trash2, User, FileText, GraduationCap, Briefcase, Code2, Lightbulb } from "lucide-react";
 import type { IResume } from "@/models/resume.model";
 
 interface ResumeEditFormProps {
@@ -155,328 +158,322 @@ export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormPr
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-8">
       {/* Personal Information */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-violet-500/30 transition-colors">
-        <CardHeader>
-          <CardTitle className="text-violet-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-violet-500 rounded-full"></div>
-            Personal Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="fullName" className="text-gray-300">Full Name *</Label>
-              <Input
-                id="fullName"
-                value={formData.personalInfo?.fullName || ""}
-                onChange={(e) => updatePersonalInfo("fullName", e.target.value)}
-                required
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
-            <div>
-              <Label htmlFor="email" className="text-gray-300">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.personalInfo?.email || ""}
-                onChange={(e) => updatePersonalInfo("email", e.target.value)}
-                required
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
-            <div>
-              <Label htmlFor="phone" className="text-gray-300">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.personalInfo?.phone || ""}
-                onChange={(e) => updatePersonalInfo("phone", e.target.value)}
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
-            <div>
-              <Label htmlFor="linkedIn" className="text-gray-300">LinkedIn</Label>
-              <Input
-                id="linkedIn"
-                value={formData.personalInfo?.linkedIn || ""}
-                onChange={(e) => updatePersonalInfo("linkedIn", e.target.value)}
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
-            <div>
-              <Label htmlFor="github" className="text-gray-300">GitHub</Label>
-              <Input
-                id="github"
-                value={formData.personalInfo?.github || ""}
-                onChange={(e) => updatePersonalInfo("github", e.target.value)}
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
-            <div>
-              <Label htmlFor="portfolio" className="text-gray-300">Portfolio</Label>
-              <Input
-                id="portfolio"
-                value={formData.personalInfo?.portfolio || ""}
-                onChange={(e) => updatePersonalInfo("portfolio", e.target.value)}
-                className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-              />
-            </div>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <User className="w-5 h-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Personal Information</h2>
+        </div>
+        <Separator />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name *</Label>
+            <Input
+              id="fullName"
+              value={formData.personalInfo?.fullName || ""}
+              onChange={(e) => updatePersonalInfo("fullName", e.target.value)}
+              required
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.personalInfo?.email || ""}
+              onChange={(e) => updatePersonalInfo("email", e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              value={formData.personalInfo?.phone || ""}
+              onChange={(e) => updatePersonalInfo("phone", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="linkedIn">LinkedIn</Label>
+            <Input
+              id="linkedIn"
+              value={formData.personalInfo?.linkedIn || ""}
+              onChange={(e) => updatePersonalInfo("linkedIn", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="github">GitHub</Label>
+            <Input
+              id="github"
+              value={formData.personalInfo?.github || ""}
+              onChange={(e) => updatePersonalInfo("github", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="portfolio">Portfolio</Label>
+            <Input
+              id="portfolio"
+              value={formData.personalInfo?.portfolio || ""}
+              onChange={(e) => updatePersonalInfo("portfolio", e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Summary */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-violet-500/30 transition-colors">
-        <CardHeader>
-          <CardTitle className="text-violet-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-violet-500 rounded-full"></div>
-            Professional Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            placeholder="Brief professional summary..."
-            value={formData.summary || ""}
-            onChange={(e) => setFormData(prev => ({ ...prev, summary: e.target.value }))}
-            rows={4}
-            className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50"
-          />
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <FileText className="w-5 h-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Professional Summary</h2>
+        </div>
+        <Separator />
+        <Textarea
+          placeholder="Brief professional summary..."
+          value={formData.summary || ""}
+          onChange={(e) => setFormData(prev => ({ ...prev, summary: e.target.value }))}
+          rows={4}
+        />
+      </div>
 
       {/* Education */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-blue-500/30 transition-colors">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-blue-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-            Education
-          </CardTitle>
-          <Button type="button" onClick={addEducation} size="sm" variant="outline" className="bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Education
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Education</h2>
+            {formData.education?.length ? (
+              <Badge variant="secondary">{formData.education.length}</Badge>
+            ) : null}
+          </div>
+          <Button type="button" onClick={addEducation} size="sm" variant="outline">
+            <Plus className="w-4 h-4 mr-1" />
+            Add
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <Separator />
+        <div className="space-y-4">
           {formData.education?.map((edu, index) => (
-            <div key={index} className="border border-white/10 bg-black/20 rounded-lg p-4 relative space-y-3">
-              <Button
-                type="button"
-                onClick={() => removeEducation(index)}
-                size="sm"
-                variant="destructive"
-                className="absolute top-2 right-2 bg-red-500/20 border-red-500/30 text-red-300 hover:bg-red-500/30"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-gray-300">Institution</Label>
-                  <Input
-                    value={edu.institution || ""}
-                    onChange={(e) => updateEducation(index, "institution", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50"
-                  />
+            <Card key={index}>
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => removeEducation(index)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-                <div>
-                  <Label className="text-gray-300">Degree</Label>
-                  <Input
-                    value={edu.degree || ""}
-                    onChange={(e) => updateEducation(index, "degree", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Institution</Label>
+                    <Input
+                      value={edu.institution || ""}
+                      onChange={(e) => updateEducation(index, "institution", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Degree</Label>
+                    <Input
+                      value={edu.degree || ""}
+                      onChange={(e) => updateEducation(index, "degree", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Major</Label>
+                    <Input
+                      value={edu.major || ""}
+                      onChange={(e) => updateEducation(index, "major", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>GPA</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={edu.gpa || ""}
+                      onChange={(e) => updateEducation(index, "gpa", parseFloat(e.target.value))}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-gray-300">Major</Label>
-                  <Input
-                    value={edu.major || ""}
-                    onChange={(e) => updateEducation(index, "major", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50"
-                  />
-                </div>
-                <div>
-                  <Label className="text-gray-300">GPA</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={edu.gpa || ""}
-                    onChange={(e) => updateEducation(index, "gpa", parseFloat(e.target.value))}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50"
-                  />
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Work Experience */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-purple-500/30 transition-colors">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-purple-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-            Work Experience
-          </CardTitle>
-          <Button type="button" onClick={addWorkExperience} size="sm" variant="outline" className="bg-purple-500/10 border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Experience
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Work Experience</h2>
+            {formData.workExperience?.length ? (
+              <Badge variant="secondary">{formData.workExperience.length}</Badge>
+            ) : null}
+          </div>
+          <Button type="button" onClick={addWorkExperience} size="sm" variant="outline">
+            <Plus className="w-4 h-4 mr-1" />
+            Add
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <Separator />
+        <div className="space-y-4">
           {formData.workExperience?.map((exp, index) => (
-            <div key={index} className="border border-white/10 bg-black/20 rounded-lg p-4 relative space-y-3">
-              <Button
-                type="button"
-                onClick={() => removeWorkExperience(index)}
-                size="sm"
-                variant="destructive"
-                className="absolute top-2 right-2 bg-red-500/20 border-red-500/30 text-red-300 hover:bg-red-500/30"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-gray-300">Company</Label>
-                  <Input
-                    value={exp.company || ""}
-                    onChange={(e) => updateWorkExperience(index, "company", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500/50"
+            <Card key={index}>
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => removeWorkExperience(index)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Company</Label>
+                    <Input
+                      value={exp.company || ""}
+                      onChange={(e) => updateWorkExperience(index, "company", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Position</Label>
+                    <Input
+                      value={exp.position || ""}
+                      onChange={(e) => updateWorkExperience(index, "position", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Location</Label>
+                    <Input
+                      value={exp.location || ""}
+                      onChange={(e) => updateWorkExperience(index, "location", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Start Date</Label>
+                    <Input
+                      type="date"
+                      value={exp.startDate ? new Date(exp.startDate).toISOString().split('T')[0] : ""}
+                      onChange={(e) => updateWorkExperience(index, "startDate", e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={exp.description || ""}
+                    onChange={(e) => updateWorkExperience(index, "description", e.target.value)}
+                    rows={3}
                   />
                 </div>
-                <div>
-                  <Label className="text-gray-300">Position</Label>
-                  <Input
-                    value={exp.position || ""}
-                    onChange={(e) => updateWorkExperience(index, "position", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500/50"
-                  />
-                </div>
-                <div>
-                  <Label className="text-gray-300">Location</Label>
-                  <Input
-                    value={exp.location || ""}
-                    onChange={(e) => updateWorkExperience(index, "location", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500/50"
-                  />
-                </div>
-                <div>
-                  <Label className="text-gray-300">Start Date</Label>
-                  <Input
-                    type="date"
-                    value={exp.startDate ? new Date(exp.startDate).toISOString().split('T')[0] : ""}
-                    onChange={(e) => updateWorkExperience(index, "startDate", e.target.value)}
-                    className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500/50"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-gray-300">Description</Label>
-                <Textarea
-                  value={exp.description || ""}
-                  onChange={(e) => updateWorkExperience(index, "description", e.target.value)}
-                  rows={3}
-                  className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500/50"
-                />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Skills */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-fuchsia-500/30 transition-colors">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-fuchsia-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-fuchsia-500 rounded-full"></div>
-            Skills
-          </CardTitle>
-          <Button type="button" onClick={addSkillCategory} size="sm" variant="outline" className="bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-300 hover:bg-fuchsia-500/20">
-            <Plus className="w-4 h-4 mr-2" />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Code2 className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Skills</h2>
+            {formData.skills?.length ? (
+              <Badge variant="secondary">{formData.skills.length}</Badge>
+            ) : null}
+          </div>
+          <Button type="button" onClick={addSkillCategory} size="sm" variant="outline">
+            <Plus className="w-4 h-4 mr-1" />
             Add Category
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <Separator />
+        <div className="space-y-4">
           {formData.skills?.map((skillGroup, index) => (
-            <div key={index} className="border border-white/10 bg-black/20 rounded-lg p-4 relative space-y-3">
-              <Button
-                type="button"
-                onClick={() => removeSkillCategory(index)}
-                size="sm"
-                variant="destructive"
-                className="absolute top-2 right-2 bg-red-500/20 border-red-500/30 text-red-300 hover:bg-red-500/30"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-              <div>
-                <Label className="text-gray-300">Category</Label>
-                <Input
-                  value={skillGroup.category || ""}
-                  onChange={(e) => updateSkillCategory(index, "category", e.target.value)}
-                  placeholder="e.g., Programming Languages"
-                  className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-fuchsia-500/50"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-300">Skills (comma-separated)</Label>
-                <Input
-                  value={skillGroup.skills?.join(", ") || ""}
-                  onChange={(e) => updateSkillCategory(index, "skills", e.target.value)}
-                  placeholder="e.g., JavaScript, Python, TypeScript"
-                  className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-fuchsia-500/50"
-                />
-              </div>
-            </div>
+            <Card key={index}>
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => removeSkillCategory(index)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Input
+                    value={skillGroup.category || ""}
+                    onChange={(e) => updateSkillCategory(index, "category", e.target.value)}
+                    placeholder="e.g., Programming Languages"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Skills (comma-separated)</Label>
+                  <Input
+                    value={skillGroup.skills?.join(", ") || ""}
+                    onChange={(e) => updateSkillCategory(index, "skills", e.target.value)}
+                    placeholder="e.g., JavaScript, Python, TypeScript"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Parsing Feedback Suggestion */}
-      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-violet-500/30 transition-colors">
-        <CardHeader>
-          <CardTitle className="text-violet-300 flex items-center gap-2">
-            <div className="w-1 h-6 bg-violet-500 rounded-full"></div>
-            Improve Resume Parsing
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-gray-400 text-sm">
-            Help us parse your resume better next time. Add suggestions about your field, format preferences, or any specific details we should focus on.
-          </p>
-          <Textarea
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="e.g., 'Focus on technical skills for software engineering roles' or 'Include project links from GitHub'"
-            className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50 min-h-[80px]"
-          />
-          <Button
-            type="button"
-            onClick={handleFeedbackSubmit}
-            disabled={!feedback.trim() || savingFeedback}
-            variant="outline"
-            className="border-violet-500/30 text-violet-300 hover:bg-violet-500/10"
-          >
-            {savingFeedback ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Suggestion
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Parsing Feedback */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Lightbulb className="w-5 h-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Improve Parsing</h2>
+        </div>
+        <Separator />
+        <p className="text-sm text-muted-foreground">
+          Help us parse your resume better next time. Add suggestions about your field, format preferences, or specific details we should focus on.
+        </p>
+        <Textarea
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="e.g., 'Focus on technical skills for software engineering roles' or 'Include project links from GitHub'"
+          rows={3}
+        />
+        <Button
+          type="button"
+          onClick={handleFeedbackSubmit}
+          disabled={!feedback.trim() || savingFeedback}
+          variant="outline"
+        >
+          {savingFeedback ? (
+            <>
+              <Spinner className="mr-2" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Suggestion
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* Submit Button */}
+      <Separator />
       <div className="flex justify-end gap-4">
-        <Button type="submit" disabled={saving} size="lg" className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-700 hover:via-purple-700 hover:to-fuchsia-700 text-white border-0 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40">
+        <Button type="submit" disabled={saving} size="lg">
           {saving ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Spinner className="mr-2" />
               Saving...
             </>
           ) : (
