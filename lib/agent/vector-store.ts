@@ -1,63 +1,49 @@
 import OpenAI from "openai";
 import type { IResume } from "@/models/resume.model";
-import { connectToDatabase } from "@/database/db";
-import mongoose from "mongoose";
+import { QdrantClient } from "@qdrant/js-client";
+
+// Qdrant collection name for resume embeddings
+const COLLECTION_NAME = "resume_embeddings";
+const VECTOR_SIZE = 512; // Using 512 dimensions for cost-effective testing
 
 /**
- * Vector embedding document schema for resume chunks
+ * Initialize Qdrant client
  */
-interface IResumeEmbedding {
-  userId: mongoose.Types.ObjectId;
-  resumeId: mongoose.Types.ObjectId;
-  chunkText: string;
-  embedding: number[];
-  metadata: {
-    section: string; // 'personal', 'education', 'experience', 'skills', 'projects', etc.
-    chunkIndex: number;
-    timestamp: Date;
-  };
+function getQdrantClient(): QdrantClient {
+  if (!process.env.VECTOR_DB_ENDPOINT || !process.env.VECTOR_DB_API) {
+    throw new Error("Qdrant credentials not found in environment variables");
+  }
+
+  return new QdrantClient({
+    url: process.env.VECTOR_DB_ENDPOINT,
+    apiKey: process.env.VECTOR_DB_API,
+  });
 }
 
-const resumeEmbeddingSchema = new mongoose.Schema<IResumeEmbedding>({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    ref: "User",
-    index: true,
-  },
-  resumeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    ref: "Resume",
-    index: true,
-  },
-  chunkText: {
-    type: String,
-    required: true,
-  },
-  embedding: {
-    type: [Number],
-    required: true,
-    // Using 512 dimensions for cost-effective testing (instead of 1536)
-  },
-  metadata: {
-    section: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    chunkIndex: Number,
-    timestamp: Date,
-  },
-});
-
-// Compound index for efficient queries
-resumeEmbeddingSchema.index({ userId: 1, resumeId: 1 });
-resumeEmbeddingSchema.index({ userId: 1, "metadata.section": 1 });
-
-const ResumeEmbedding =
-  mongoose.models.ResumeEmbedding ||
-  mongoose.model<IResumeEmbedding>("ResumeEmbedding", resumeEmbeddingSchema);
+/**
+ * Ensure collection exists with proper configuration
+ */
+async function ensureCollection(): Promise<void> {
+  const client = getQdrantClient();
+  
+  try {
+    const collections = await client.getCollections();
+    const exists = collections.collections.some((c) => c.name === COLLECTION_NAME);
+    
+    if (!exists) {
+      await client.createCollection(COLLECTION_NAME, {
+        vectors: {
+          size: VECTOR_SIZE,
+          distance: "Cosine",
+        },
+      });
+      console.log(`Created Qdrant collection: ${COLLECTION_NAME}`);
+    }
+  } catch (error) {
+    console.error("Error ensuring collection:", error);
+    throw error;
+  }
+}
 
 /**
  * Clean and prepare resume data for embedding
@@ -244,8 +230,8 @@ async function generateEmbedding(text: string): Promise<number[]> {
  * Store resume embeddings in vector database
  */
 export async function storeResumeInVectorDB(
-  userId: string | mongoose.Types.ObjectId,
-  resumeId: string | mongoose.Types.ObjectId,
+  userId: string,
+  resumeId: string,
   resumeData: Partial<IResume>
 ): Promise<{
   success: boolean;
@@ -255,8 +241,10 @@ export async function storeResumeInVectorDB(
   try {
     console.log(`Storing resume embeddings for user ${userId}, resume ${resumeId}`);
 
-    // Connect to database
-    await connectToDatabase();
+    const client = getQdrantClient();
+    
+    // Ensure collection exists
+    await ensureCollection();
 
     // Clean and chunk the resume data
     const chunks = cleanResumeData(resumeData);
@@ -271,14 +259,18 @@ export async function storeResumeInVectorDB(
     }
 
     // Delete existing embeddings for this resume (if updating)
-    await ResumeEmbedding.deleteMany({
-      userId: new mongoose.Types.ObjectId(userId as string),
-      resumeId: new mongoose.Types.ObjectId(resumeId as string),
+    await client.delete(COLLECTION_NAME, {
+      filter: {
+        must: [
+          { key: "userId", match: { value: userId } },
+          { key: "resumeId", match: { value: resumeId } },
+        ],
+      },
     });
     console.log("Deleted existing embeddings");
 
     // Generate embeddings and store
-    const embeddingDocs = [];
+    const points = [];
     
     for (const chunkJson of chunks) {
       const chunk = JSON.parse(chunkJson);
@@ -286,26 +278,33 @@ export async function storeResumeInVectorDB(
       // Generate embedding for this chunk
       const embedding = await generateEmbedding(chunk.text);
       
-      embeddingDocs.push({
-        userId: new mongoose.Types.ObjectId(userId as string),
-        resumeId: new mongoose.Types.ObjectId(resumeId as string),
-        chunkText: chunk.text,
-        embedding: embedding,
-        metadata: {
+      // Create unique ID for this point
+      const pointId = `${userId}_${resumeId}_${chunk.index}`;
+      
+      points.push({
+        id: pointId,
+        vector: embedding,
+        payload: {
+          userId: userId,
+          resumeId: resumeId,
+          chunkText: chunk.text,
           section: chunk.section,
           chunkIndex: chunk.index,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
       });
     }
 
-    // Bulk insert embeddings
-    await ResumeEmbedding.insertMany(embeddingDocs);
-    console.log(`Stored ${embeddingDocs.length} embeddings in vector database`);
+    // Bulk insert points into Qdrant
+    await client.upsert(COLLECTION_NAME, {
+      wait: true,
+      points: points,
+    });
+    console.log(`Stored ${points.length} embeddings in Qdrant vector database`);
 
     return {
       success: true,
-      chunksStored: embeddingDocs.length,
+      chunksStored: points.length,
     };
   } catch (error) {
     console.error("Vector store error:", error);
@@ -318,37 +317,46 @@ export async function storeResumeInVectorDB(
 }
 
 /**
- * Search resume embeddings (for future use)
+ * Search resume embeddings using Qdrant's vector search
  */
 export async function searchResumeEmbeddings(
-  userId: string | mongoose.Types.ObjectId,
+  userId: string,
   queryText: string,
-  limit: number = 5
-): Promise<Array<{ text: string; section: string; score: number }>> {
+  limit: number = 5,
+  resumeId?: string
+): Promise<Array<{ text: string; section: string; score: number; resumeId: string }>> {
   try {
-    await connectToDatabase();
-
+    const client = getQdrantClient();
+    
     // Generate embedding for query
     const queryEmbedding = await generateEmbedding(queryText);
 
-    // Find all embeddings for this user
-    const userEmbeddings = await ResumeEmbedding.find({
-      userId: new mongoose.Types.ObjectId(userId as string),
+    // Build filter for user (and optionally specific resume)
+    const filter: any = {
+      must: [{ key: "userId", match: { value: userId } }],
+    };
+    
+    if (resumeId) {
+      filter.must.push({ key: "resumeId", match: { value: resumeId } });
+    }
+
+    // Perform vector search in Qdrant
+    const searchResult = await client.search(COLLECTION_NAME, {
+      vector: queryEmbedding,
+      filter: filter,
+      limit: limit,
+      with_payload: true,
     });
 
-    // Calculate cosine similarity
-    const results = userEmbeddings
-      .map((doc) => {
-        const similarity = cosineSimilarity(queryEmbedding, doc.embedding);
-        return {
-          text: doc.chunkText,
-          section: doc.metadata.section,
-          score: similarity,
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    // Format results
+    const results = searchResult.map((hit) => ({
+      text: hit.payload?.chunkText as string,
+      section: hit.payload?.section as string,
+      score: hit.score,
+      resumeId: hit.payload?.resumeId as string,
+    }));
 
+    console.log(`Found ${results.length} matching chunks for query`);
     return results;
   } catch (error) {
     console.error("Search error:", error);
@@ -357,41 +365,67 @@ export async function searchResumeEmbeddings(
 }
 
 /**
- * Calculate cosine similarity between two vectors
- */
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-  const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-  const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
-  return dotProduct / (magnitudeA * magnitudeB);
-}
-
-/**
- * Delete resume embeddings
+ * Delete resume embeddings from Qdrant
  */
 export async function deleteResumeEmbeddings(
-  userId: string | mongoose.Types.ObjectId,
-  resumeId: string | mongoose.Types.ObjectId
-): Promise<{ success: boolean; deletedCount: number }> {
+  userId: string,
+  resumeId: string
+): Promise<{ success: boolean; deletedCount?: number }> {
   try {
-    await connectToDatabase();
+    const client = getQdrantClient();
 
-    const result = await ResumeEmbedding.deleteMany({
-      userId: new mongoose.Types.ObjectId(userId as string),
-      resumeId: new mongoose.Types.ObjectId(resumeId as string),
+    // Delete points matching userId and resumeId
+    const result = await client.delete(COLLECTION_NAME, {
+      filter: {
+        must: [
+          { key: "userId", match: { value: userId } },
+          { key: "resumeId", match: { value: resumeId } },
+        ],
+      },
     });
 
-    console.log(`Deleted ${result.deletedCount} embeddings`);
+    console.log(`Deleted embeddings for user ${userId}, resume ${resumeId}`);
 
     return {
       success: true,
-      deletedCount: result.deletedCount,
     };
   } catch (error) {
     console.error("Delete embeddings error:", error);
     return {
       success: false,
-      deletedCount: 0,
     };
+  }
+}
+
+/**
+ * Get all resumes stored in vector DB for a user
+ */
+export async function getUserResumesFromVectorDB(
+  userId: string
+): Promise<string[]> {
+  try {
+    const client = getQdrantClient();
+    
+    // Scroll through all points for this user
+    const result = await client.scroll(COLLECTION_NAME, {
+      filter: {
+        must: [{ key: "userId", match: { value: userId } }],
+      },
+      limit: 1000,
+      with_payload: ["resumeId"],
+    });
+
+    // Extract unique resume IDs
+    const resumeIds = new Set<string>();
+    result.points.forEach((point) => {
+      if (point.payload?.resumeId) {
+        resumeIds.add(point.payload.resumeId as string);
+      }
+    });
+
+    return Array.from(resumeIds);
+  } catch (error) {
+    console.error("Error fetching user resumes from vector DB:", error);
+    return [];
   }
 }
