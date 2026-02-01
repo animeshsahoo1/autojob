@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { FileText, Upload, LogOut, Briefcase, History } from "lucide-react";
+import { FileText, Upload, LogOut, Briefcase, History, User } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { logout } from "@/lib/actions/auth";
@@ -32,11 +32,11 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 left-0 right-0 z-50 bg-neutral-950 border-b border-neutral-800">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-4 flex items-center justify-between">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-2 flex items-center justify-between">
         {/* LOGO SECTION */}
         <Link
           href="/"
-          className="text-2xl md:text-3xl font-bold text-white hover:text-neutral-300 transition-colors"
+          className="text-xl md:text-2xl font-bold text-white hover:text-neutral-300 transition-colors"
         >
           autojob
         </Link>
@@ -46,11 +46,11 @@ const Header = () => {
           {session?.user?.id ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-9 w-9">
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
                     <AvatarImage src={session.user.image || ""} alt={session.user.name || "User"} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {getInitials(session.user.name)}
+                      <User className="h-4 w-4" />
                     </AvatarFallback>
                   </Avatar>
                 </Button>

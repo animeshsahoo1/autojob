@@ -1,10 +1,11 @@
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { Document } from "@langchain/core/documents";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdf = require("pdf-parse");
 import { ChatOpenAI } from "@langchain/openai";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
 import type { IResume } from "@/models/resume.model";
+import { readFileSync } from "fs";
 
 // Configuration: Switch between local Ollama and OpenAI for LLM parsing
 const USE_LOCAL_OLLAMA = false ;
@@ -13,34 +14,211 @@ const OLLAMA_MODEL = "deepseek-r1:1.5b"; // Local Ollama model for parsing
 const OPENAI_MODEL = "gpt-3.5-turbo";
 
 /**
+ * Month name to number mapping
+ */
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, january: 0,
+  feb: 1, february: 1,
+  mar: 2, march: 2,
+  apr: 3, april: 3,
+  may: 4,
+  jun: 5, june: 5,
+  jul: 6, july: 6,
+  aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11,
+  // Seasons
+  spring: 2, summer: 5, fall: 8, autumn: 8, winter: 11,
+};
+
+/**
  * Sanitize date values - convert "Present", "Current", empty strings, and invalid dates to undefined
+ * Handles common resume formats: "Jan 2024", "Spring 2023", "Q1 2024", "Expected May 2026"
  * Only returns valid ISO date strings (YYYY-MM-DD) or undefined
  */
 function sanitizeDate(value: any): string | undefined {
   if (!value || typeof value !== 'string') return undefined;
   
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'present' || normalized === 'current' || normalized === '') return undefined;
+  if (normalized === 'present' || normalized === 'current' || normalized === '' || normalized === 'ongoing') return undefined;
   
-  // Try to parse the date - if invalid, return undefined
-  const parsedDate = new Date(value);
-  if (isNaN(parsedDate.getTime())) {
-    console.warn(`Invalid date format: "${value}" - converting to undefined`);
-    return undefined;
+  // Remove common prefixes
+  const cleaned = normalized
+    .replace(/^(expected|anticipated|est\.?|approx\.?)\s*/i, '')
+    .trim();
+  
+  // Try ISO format first (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    const date = new Date(cleaned);
+    if (!isNaN(date.getTime())) return cleaned;
   }
   
-  // Return ISO format (YYYY-MM-DD)
-  return parsedDate.toISOString().split('T')[0];
+  // Try "Month Year" format (Jan 2024, January 2024)
+  const monthYearMatch = cleaned.match(/^([a-z]+)\s+(\d{4})$/i);
+  if (monthYearMatch) {
+    const month = MONTH_MAP[monthYearMatch[1].toLowerCase()];
+    const year = parseInt(monthYearMatch[2], 10);
+    if (month !== undefined && year >= 1900 && year <= 2100) {
+      return `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    }
+  }
+  
+  // Try "Year Month" format (2024 Jan)
+  const yearMonthMatch = cleaned.match(/^(\d{4})\s+([a-z]+)$/i);
+  if (yearMonthMatch) {
+    const year = parseInt(yearMonthMatch[1], 10);
+    const month = MONTH_MAP[yearMonthMatch[2].toLowerCase()];
+    if (month !== undefined && year >= 1900 && year <= 2100) {
+      return `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    }
+  }
+  
+  // Try year only (2024)
+  const yearOnlyMatch = cleaned.match(/^(\d{4})$/);
+  if (yearOnlyMatch) {
+    const year = parseInt(yearOnlyMatch[1], 10);
+    if (year >= 1900 && year <= 2100) {
+      return `${year}-01-01`;
+    }
+  }
+  
+  // Try Q1/Q2/Q3/Q4 format
+  const quarterMatch = cleaned.match(/^q([1-4])\s+(\d{4})$/i);
+  if (quarterMatch) {
+    const quarter = parseInt(quarterMatch[1], 10);
+    const year = parseInt(quarterMatch[2], 10);
+    const month = (quarter - 1) * 3 + 1;
+    if (year >= 1900 && year <= 2100) {
+      return `${year}-${String(month).padStart(2, '0')}-01`;
+    }
+  }
+  
+  // Fallback: try native Date parsing
+  const parsedDate = new Date(value);
+  if (!isNaN(parsedDate.getTime())) {
+    return parsedDate.toISOString().split('T')[0];
+  }
+  
+  return undefined;
 }
 
 /**
- * Sanitize enum values - remove if not in allowed list
+ * Sanitize enum values - remove if not in allowed list (case-insensitive)
  */
-function sanitizeEnum<T>(value: any, allowedValues: readonly T[]): T | undefined {
+function sanitizeEnum<T extends string>(value: any, allowedValues: readonly T[]): T | undefined {
   if (!value || typeof value !== 'string') return undefined;
   const normalized = value.trim().toLowerCase();
   if (normalized === '') return undefined;
-  return allowedValues.includes(value as T) ? (value as T) : undefined;
+  
+  // Find matching value (case-insensitive)
+  const match = allowedValues.find(v => v.toLowerCase() === normalized);
+  return match;
+}
+
+/**
+ * Extract URLs from raw text for fallback parsing
+ */
+function extractUrlsFromText(rawText: string): {
+  github: string[];
+  linkedin: string | null;
+  portfolio: string[];
+  other: string[];
+} {
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+  const allUrls = rawText.match(urlRegex) || [];
+  
+  const github: string[] = [];
+  const portfolio: string[] = [];
+  const other: string[] = [];
+  let linkedin: string | null = null;
+  
+  for (const url of allUrls) {
+    const cleanUrl = url.replace(/[.,;:!?)]+$/, ''); // Remove trailing punctuation
+    if (cleanUrl.includes('github.com')) {
+      github.push(cleanUrl);
+    } else if (cleanUrl.includes('linkedin.com')) {
+      linkedin = cleanUrl;
+    } else if (cleanUrl.includes('vercel.app') || cleanUrl.includes('netlify.app') || 
+               cleanUrl.includes('herokuapp.com') || cleanUrl.includes('railway.app') ||
+               cleanUrl.includes('render.com') || cleanUrl.includes('.io') ||
+               cleanUrl.includes('firebase') || cleanUrl.includes('surge.sh')) {
+      portfolio.push(cleanUrl);
+    } else if (!cleanUrl.includes('google.com') && !cleanUrl.includes('fonts.')) {
+      other.push(cleanUrl);
+    }
+  }
+  
+  return { github, linkedin, portfolio, other };
+}
+
+/**
+ * Enhance extracted data with URLs found in raw text
+ */
+function enhanceWithExtractedUrls(jsonData: any, rawText: string): any {
+  const urls = extractUrlsFromText(rawText);
+  
+  console.log("🔗 === EXTRACTED URLs ===");
+  console.log("GitHub:", urls.github);
+  console.log("LinkedIn:", urls.linkedin);
+  console.log("Portfolio/Live:", urls.portfolio);
+  console.log("Other:", urls.other);
+  console.log("=== END URLs ===\n");
+  
+  // Enhance personalInfo with missing links
+  if (!jsonData.personalInfo.github && urls.github.length > 0) {
+    // Find the main github profile (not a repo)
+    const profileUrl = urls.github.find(u => {
+      const path = u.replace('https://github.com/', '').replace('http://github.com/', '');
+      return !path.includes('/') || path.split('/').filter(Boolean).length === 1;
+    });
+    if (profileUrl) {
+      jsonData.personalInfo.github = profileUrl;
+    }
+  }
+  
+  if (!jsonData.personalInfo.linkedIn && urls.linkedin) {
+    jsonData.personalInfo.linkedIn = urls.linkedin;
+  }
+  
+  if (!jsonData.personalInfo.portfolio && urls.portfolio.length > 0) {
+    jsonData.personalInfo.portfolio = urls.portfolio[0];
+  }
+  
+  // Enhance projects with GitHub and live URLs
+  if (Array.isArray(jsonData.projects)) {
+    const repoUrls = urls.github.filter(u => {
+      const path = u.replace('https://github.com/', '').replace('http://github.com/', '');
+      return path.includes('/') && path.split('/').filter(Boolean).length >= 2;
+    });
+    
+    jsonData.projects = jsonData.projects.map((project: any, index: number) => {
+      // Try to match GitHub repo by project name
+      if (!project.github) {
+        const projectName = (project.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const matchedRepo = repoUrls.find(url => 
+          url.toLowerCase().includes(projectName) || 
+          projectName.includes(url.split('/').pop()?.toLowerCase() || '')
+        );
+        if (matchedRepo) {
+          project.github = matchedRepo;
+        } else if (repoUrls[index]) {
+          // Fallback: assign by position if no name match
+          project.github = repoUrls[index];
+        }
+      }
+      
+      // Try to match live URL
+      if (!project.url && urls.portfolio[index]) {
+        project.url = urls.portfolio[index];
+      }
+      
+      return project;
+    });
+  }
+  
+  return jsonData;
 }
 
 /**
@@ -159,7 +337,7 @@ export interface ParsedResume {
 }
 
 /**
- * Parse a PDF resume using LangChain
+ * Parse a PDF resume using pdf-parse
  * @param file - PDF file buffer or path
  * @param fileName - Original filename
  * @param fileSize - File size in bytes
@@ -171,31 +349,27 @@ export async function parseResumePDF(
   fileSize: number,
 ): Promise<ParsedResume> {
   try {
-    let loader: PDFLoader;
+    let buffer: Buffer;
 
-    // Handle Buffer (from file upload)
+    // Handle Buffer (from file upload) or file path
     if (Buffer.isBuffer(file)) {
-      // Create a temporary blob from buffer
-      const blob = new Blob([file], { type: "application/pdf" });
-      loader = new PDFLoader(blob, {
-        splitPages: false, // Keep all content together
-      });
+      buffer = file;
     } else {
-      // Handle file path
-      loader = new PDFLoader(file, {
-        splitPages: false,
-      });
+      // Read file from path
+      buffer = readFileSync(file);
     }
 
-    // Load and parse the PDF
-    const docs: Document[] = await loader.load();
+    // Parse PDF using pdf-parse
+    const data = await pdf(buffer);
 
-    // Combine all pages into one text
-    const rawText = docs.map((doc) => doc.pageContent).join("\n\n");
+    console.log("\n📄 === PARSED PDF TEXT ===");
+    console.log(data.text.substring(0, 2000) + (data.text.length > 2000 ? "\n... [truncated]" : ""));
+    console.log("=== END PDF TEXT ===");
+    console.log(`📊 Total characters: ${data.text.length}, Pages: ${data.numpages}\n`);
 
     return {
-      rawText: rawText.trim(),
-      pageCount: docs.length,
+      rawText: data.text.trim(),
+      pageCount: data.numpages,
       metadata: {
         fileName,
         fileSize,
@@ -497,45 +671,66 @@ const resumeSchema = z.object({
 });
 
 /**
- * Verify extracted data exists in original text (prevents hallucination)
+ * Build the extraction prompt for resume parsing
+ * Shared between Ollama and OpenAI to avoid duplication
+ * @param userFeedback - Optional user feedback
+ * @param escapeBraces - If true, escapes curly braces for LangChain PromptTemplate
  */
-function verifyDataInText(value: any, originalText: string): boolean {
-  if (!value || typeof value !== 'string') return true;
-  if (value.length < 3) return true; // Skip very short values
-  
-  const normalizedText = originalText.toLowerCase();
-  const normalizedValue = value.toLowerCase();
-  
-  // Check if value appears in text
-  return normalizedText.includes(normalizedValue);
-}
+function buildExtractionPrompt(userFeedback?: string[], escapeBraces = false): string {
+  const feedbackInstructions = userFeedback && userFeedback.length > 0
+    ? `\nUSER PREFERENCES:\n${userFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n`
+    : '';
 
-/**
- * Clean extracted data by removing hallucinated fields
- */
-function cleanHallucinatedData(data: any, originalText: string): any {
-  if (Array.isArray(data)) {
-    return data.map(item => cleanHallucinatedData(item, originalText)).filter(Boolean);
-  }
-  
-  if (typeof data === 'object' && data !== null) {
-    const cleaned: any = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (typeof value === 'string' && value.length >= 3) {
-        // Verify string values exist in original text
-        if (verifyDataInText(value, originalText)) {
-          cleaned[key] = value;
-        }
-      } else if (typeof value === 'object') {
-        cleaned[key] = cleanHallucinatedData(value, originalText);
-      } else {
-        cleaned[key] = value;
-      }
-    }
-    return cleaned;
-  }
-  
-  return data;
+  // Use placeholders that will be replaced based on escapeBraces flag
+  const lb = escapeBraces ? '{{' : '{';
+  const rb = escapeBraces ? '}}' : '}';
+
+  return `You are a resume parser. Extract information from the resume and output ONLY valid JSON.
+
+## EXTRACTION RULES
+1. Extract ONLY information explicitly written in the resume
+2. If a field is not present, omit it or use empty string
+3. Email must be valid format (user@domain.com)
+4. Use empty arrays [] for missing array fields
+
+## DATE FORMAT
+- Use YYYY-MM-DD format: "2025-07-01"
+- Convert "July 2025" → "2025-07-01" (use first day of month)
+- For current/ongoing positions, use empty string "" for endDate
+- If date unclear, use empty string ""
+
+## TEXT SPACING
+PDFs often have concatenated text. Fix spacing issues:
+- "AyushKumar" → "Ayush Kumar"
+- "SoftwareEngineerIntern" → "Software Engineer Intern"
+- "IndianInstituteofTechnology" → "Indian Institute of Technology"
+
+## SUMMARY (REQUIRED - MUST GENERATE)
+You MUST always generate a "summary" field. This is the ONLY field where you should infer content:
+- If resume has a summary/objective, extract and enhance it
+- If no summary exists, CREATE one from education, experience, skills, and achievements
+- Summary should be 2-3 sentences highlighting expertise, education, and key skills
+- Example: "Computer Science student at IIT with full-stack development experience. Proficient in Python, React, and cloud technologies. Strong background in competitive programming."
+
+## PROJECTS (IMPORTANT)
+For each project, extract ALL available information:
+- "name": Project name
+- "description": What the project does (1-2 sentences summarizing functionality)
+- "technologies": Array of technologies/frameworks used
+- "url": Live/deployed project URL (look for "Live:", "Demo:", "Website:", or any http/https links)
+- "github": GitHub repository URL (look for "GitHub:", "Source:", "Code:", or github.com links)
+- "highlights": Key achievements or features
+${feedbackInstructions}
+## OUTPUT STRUCTURE
+${lb}
+  "personalInfo": ${lb} "fullName": string, "email": string, "phone"?: string, "linkedIn"?: string, "github"?: string, "portfolio"?: string ${rb},
+  "summary": string (REQUIRED),
+  "education": [${lb} "institution": string, "degree": string, "major"?: string, "gpa"?: number, "startDate"?: string, "endDate"?: string ${rb}],
+  "workExperience": [${lb} "company": string, "position": string, "description"?: string, "startDate"?: string, "endDate"?: string, "responsibilities"?: [string], "achievements"?: [string], "technologies"?: [string] ${rb}],
+  "skills": [${lb} "category": string, "skills": [string] ${rb}],
+  "projects"?: [${lb} "name": string, "description"?: string, "technologies"?: [string], "url"?: string, "github"?: string, "highlights"?: [string] ${rb}],
+  "certifications"?: [${lb} "name": string, "issuer": string, "issueDate"?: string ${rb}]
+${rb}`;
 }
 
 /**
@@ -547,66 +742,7 @@ async function extractWithOllama(
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
   console.log(`Starting resume extraction with local Ollama (${OLLAMA_MODEL})...`);
   
-  // Build user feedback instructions
-  const feedbackInstructions = userFeedback && userFeedback.length > 0
-    ? `\n\nUSER PREFERENCES:\n${userFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n`
-    : '';
-  
-  const prompt = `You are a resume parser. Extract information from the resume text and output ONLY valid JSON.
-
-CRITICAL RULES:
-1. Output ONLY the JSON object, no explanations or markdown
-2. ONLY extract information that is EXPLICITLY written in the resume
-3. DO NOT infer, guess, or fill in missing information EXCEPT for the summary (which MUST be generated)
-5. Email must be valid format (e.g., user@domain.com)
-6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
-7. For current positions, use empty string for endDate, NOT "Present"
-8. Arrays cannot be empty - include at least [] for empty arrays
-9. ALWAYS generate a summary - this is CRITICAL and REQUIRED
-10. FIX TEXT SPACING: Add proper spaces between concatenated words (e.g., "AyushKumar" → "Ayush Kumar", "SoftwareEngineerIntern" → "Software Engineer Intern")${feedbackInstructions}
-
-IMPORTANT - TEXT SPACING (CRITICAL):
-- Many PDFs have concatenated text without spaces
-- You MUST add proper spaces between words in ALL fields
-- Examples: "IndianInstituteofTechnology" → "Indian Institute of Technology"
-- "BachelorofTechnology" → "Bachelor of Technology"
-- "SoftwareEngineerIntern" → "Software Engineer Intern"
-- "GitHubActions" → "GitHub Actions"
-- Apply this to ALL text fields: names, companies, institutions, skills, achievements, etc.
-
-IMPORTANT - SUMMARY (MUST GENERATE):
-- You MUST ALWAYS generate a "summary" field - this is MANDATORY
-- If a summary/objective is present in the resume, extract and enhance it
-- If no summary exists, CREATE one from work experience, education, skills, and achievements
-- This is the ONLY field where you MUST infer and generate content
-- The summary should be 2-3 sentences highlighting key expertise, education level, and main skills
-- Example: "Computer Science student at IIT Dhanbad with experience in full-stack development and cloud infrastructure. Proficient in Golang, Python, and modern web technologies. Strong background in competitive programming and cybersecurity."
-- NEVER leave summary empty - it is REQUIRED in every case
-
-IMPORTANT - DESCRIPTIONS (CRITICAL):
-- For work experience: ALWAYS extract or create a "description" field summarizing the role
-- For projects: ALWAYS extract or create a "description" field explaining what the project does
-- If no explicit description exists, combine bullet points/achievements into a concise 1-2 sentence description
-- Example work description: "Contributed to travel booking platform integrating third-party APIs with Node.js backend and Next.js frontend"
-- Example project description: "Real-time multiplayer game platform built with WebSockets, featuring lobby system and matchmaking"
-- Descriptions should be clear, concise, and informative - NEVER leave them empty if any information exists
-
-IMPORTANT DATE FORMATTING:
-- Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
-- If only month/year is known, use first day: "July 2025" → "2025-07-01"
-- If date is unclear or not found, use empty string ""
-- For current/ongoing, leave endDate as empty string ""
-
-Extract the following structure:
-{
-  "personalInfo": { "fullName": string, "email": string, "phone": string, "linkedIn": string, "github": string, "portfolio": string },
-  "summary": string,
-  "education": [{ "institution": string, "degree": string, "major": string, "gpa": number, "startDate": string, "endDate": string }],
-  "workExperience": [{ "company": string, "position": string, "description": string (REQUIRED), "startDate": string, "endDate": string, "responsibilities": [string], "achievements": [string], "technologies": [string] }],
-  "skills": [{ "category": string, "skills": [string] }],
-  "projects": [{ "name": string, "description": string (REQUIRED), "role": string, "technologies": [string], "url": string, "github": string }],
-  "certifications": [{ "name": string, "issuer": string, "issueDate": string }]
-}
+  const prompt = `${buildExtractionPrompt(userFeedback)}
 
 Resume Text:
 ${rawText}
@@ -634,10 +770,6 @@ Output valid JSON only:`;
     const data = await response.json();
     let aiResponse = data.response;
     
-    console.log("=== RAW OLLAMA RESPONSE ===");
-    console.log(aiResponse);
-    console.log("=== END RAW RESPONSE ===");
-    
     // Clean up response
     aiResponse = aiResponse
       .replace(/<think>.*?<\/think>/g, '')
@@ -651,10 +783,10 @@ Output valid JSON only:`;
     if (jsonMatch) {
       aiResponse = jsonMatch[0];
     }
-    
-    console.log("=== CLEANED RESPONSE ===");
-    console.log(aiResponse);
-    console.log("=== END CLEANED RESPONSE ===");
+
+    console.log("\n🤖 === LLM RAW OUTPUT ===");
+    console.log(aiResponse.substring(0, 3000) + (aiResponse.length > 3000 ? "\n... [truncated]" : ""));
+    console.log("=== END LLM OUTPUT ===\n");
     
     let jsonData = JSON.parse(aiResponse);
     
@@ -679,6 +811,9 @@ Output valid JSON only:`;
     if (!Array.isArray(jsonData.education)) jsonData.education = [];
     if (!Array.isArray(jsonData.workExperience)) jsonData.workExperience = [];
     if (!Array.isArray(jsonData.skills)) jsonData.skills = [];
+    
+    // Enhance with URLs extracted directly from raw text (fallback for missed URLs)
+    jsonData = enhanceWithExtractedUrls(jsonData, rawText);
     
     console.log("✅ Ollama extraction successful");
     
@@ -718,58 +853,9 @@ async function extractWithOpenAI(
 
   console.log("Formatting prompt...");
   
-  // Build user feedback instructions
-  const feedbackInstructions = userFeedback && userFeedback.length > 0
-    ? `\n\nUSER PREFERENCES:\n${userFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n`
-    : '';
-  
-  // Create prompt template with stricter instructions
+  // Create prompt template using shared prompt builder (escapeBraces=true for LangChain)
   const promptTemplate = PromptTemplate.fromTemplate(
-    `You are a resume parser. Extract information from the resume text and output ONLY valid JSON.
-
-CRITICAL RULES:
-1. Output ONLY the JSON object, no explanations or markdown
-2. ONLY extract information that is EXPLICITLY written in the resume
-3. DO NOT infer, guess, or fill in missing information EXCEPT for the summary (which MUST be generated)
-4. If a field is not present, leave it empty or omit it
-5. Email must be valid format (e.g., user@domain.com)
-6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
-7. For current positions, use empty string for endDate, NOT "Present"
-8. Arrays cannot be empty - include at least [] for empty arrays
-9. ALWAYS generate a summary - this is CRITICAL and REQUIRED
-10. FIX TEXT SPACING: Add proper spaces between concatenated words (e.g., "AyushKumar" → "Ayush Kumar", "SoftwareEngineerIntern" → "Software Engineer Intern")${feedbackInstructions}
-
-IMPORTANT - TEXT SPACING (CRITICAL):
-- Many PDFs have concatenated text without spaces
-- You MUST add proper spaces between words in ALL fields
-- Examples: "IndianInstituteofTechnology" → "Indian Institute of Technology"
-- "BachelorofTechnology" → "Bachelor of Technology"
-- "SoftwareEngineerIntern" → "Software Engineer Intern"
-- "GitHubActions" → "GitHub Actions"
-- Apply this to ALL text fields: names, companies, institutions, skills, achievements, etc.
-
-IMPORTANT - SUMMARY (MUST GENERATE):
-- You MUST ALWAYS generate a "summary" field - this is MANDATORY
-- If a summary/objective is present in the resume, extract and enhance it
-- If no summary exists, CREATE one from work experience, education, skills, and achievements
-- This is the ONLY field where you MUST infer and generate content
-- The summary should be 2-3 sentences highlighting key expertise, education level, and main skills
-- Example: "Computer Science student at IIT Dhanbad with experience in full-stack development and cloud infrastructure. Proficient in Golang, Python, and modern web technologies. Strong background in competitive programming and cybersecurity."
-- NEVER leave summary empty - it is REQUIRED in every case
-
-IMPORTANT - DESCRIPTIONS (CRITICAL):
-- For work experience: ALWAYS extract or create a "description" field summarizing the role
-- For projects: ALWAYS extract or create a "description" field explaining what the project does
-- If no explicit description exists, combine bullet points/achievements into a concise 1-2 sentence description
-- Example work description: "Contributed to travel booking platform integrating third-party APIs with Node.js backend and Next.js frontend"
-- Example project description: "Real-time multiplayer game platform built with WebSockets, featuring lobby system and matchmaking"
-- Descriptions should be clear, concise, and informative - NEVER leave them empty if any information exists
-
-IMPORTANT DATE FORMATTING:
-- Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
-- If only month/year is known, use first day: "July 2025" → "2025-07-01"
-- If date is unclear or not found, use empty string ""
-- For current/ongoing, leave endDate as empty string ""
+    `${buildExtractionPrompt(userFeedback, true)}
 
 {format_instructions}
 
@@ -791,15 +877,9 @@ Output valid JSON only:`
   const result = await model.invoke(formattedPrompt);
   let response = result.content.toString();
   
-  console.log("=== RAW AI RESPONSE ===");
-  console.log(response);
-  console.log("=== END RAW RESPONSE ===");
-  
-  console.log("Cleaning response...");
-  
   // Clean up response - remove thinking tags, code blocks, and fix formatting
   response = response
-    .replace(/<think>.*?<\/think>/gs, '') // Remove <think> tags
+    .replace(/<think>[\s\S]*?<\/think>/g, '') // Remove <think> tags
     .replace(/```json\s*/g, '') // Remove ```json
     .replace(/```\s*/g, '') // Remove ```
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
@@ -810,22 +890,15 @@ Output valid JSON only:`
   if (jsonMatch) {
     response = jsonMatch[0];
   }
-  
-  console.log("=== CLEANED RESPONSE ===");
-  console.log(response);
-  console.log("=== END CLEANED RESPONSE ===");
-  
-  console.log("Parsing response...");
+
+  console.log("\n🤖 === LLM RAW OUTPUT ===");
+  console.log(response.substring(0, 3000) + (response.length > 3000 ? "\n... [truncated]" : ""));
+  console.log("=== END LLM OUTPUT ===\n");
   
   try {
-    // First try to parse as JSON to validate and fix
+    // Parse as JSON and fix common issues
     let jsonData = JSON.parse(response);
     
-    console.log("=== PARSED JSON DATA ===");
-    console.log(JSON.stringify(jsonData, null, 2));
-    console.log("=== END PARSED JSON ===");
-    
-    // Fix common issues
     // Ensure required fields exist with defaults
     if (!jsonData.personalInfo) {
       jsonData.personalInfo = { fullName: "Unknown", email: "unknown@example.com" };
@@ -837,32 +910,25 @@ Output valid JSON only:`
       jsonData.personalInfo.email = "unknown@example.com";
     }
     
-    // Fix email if it contains phone number or invalid format
+    // Fix email if invalid format
     if (jsonData.personalInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(jsonData.personalInfo.email)) {
-      // Extract email from text if exists
       const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
       jsonData.personalInfo.email = emailMatch ? emailMatch[0] : "unknown@example.com";
     }
     
     // Ensure arrays exist
-    if (!Array.isArray(jsonData.education)) {
-      jsonData.education = [];
-    }
-    if (!Array.isArray(jsonData.workExperience)) {
-      jsonData.workExperience = [];
-    }
-    if (!Array.isArray(jsonData.skills)) {
-      jsonData.skills = [];
-    }
+    if (!Array.isArray(jsonData.education)) jsonData.education = [];
+    if (!Array.isArray(jsonData.workExperience)) jsonData.workExperience = [];
+    if (!Array.isArray(jsonData.skills)) jsonData.skills = [];
     
-    console.log("✅ JSON parsing successful - using extracted data directly");
+    // Enhance with URLs extracted directly from raw text (fallback for missed URLs)
+    jsonData = enhanceWithExtractedUrls(jsonData, rawText);
     
     // Sanitize data to prevent validation errors
     jsonData = sanitizeResumeData(jsonData);
     
-    console.log("Resume extraction completed successfully");
+    console.log("✅ Resume extraction completed successfully");
 
-    // Add metadata
     return {
       ...jsonData,
       rawText,
@@ -916,12 +982,31 @@ export async function parseAndExtractResume(
   const rawData = await parseResumePDF(file, fileName, fileSize);
   console.log(`✅ PDF parsed: ${rawData.pageCount} pages, ${rawData.rawText.length} characters`);
 
-  console.log("🤖 Extracting structured data with OpenAI...");
-  // Step 2: Extract structured fields using LangChain with OpenAI
+  console.log("🤖 Extracting structured data...");
+  // Step 2: Extract structured fields using LLM
   const structuredData = await extractResumeFields(rawData.rawText, userFeedback);
 
   // Add file metadata
   structuredData.fileUrl = fileName;
+
+  // Log final parsed output
+  console.log("\n📊 === FINAL PARSED OUTPUT ===");
+  console.log("Personal Info:", JSON.stringify(structuredData.personalInfo, null, 2));
+  console.log("Summary:", structuredData.summary?.substring(0, 200) + "...");
+  console.log("Education:", structuredData.education?.length || 0, "entries");
+  console.log("Work Experience:", structuredData.workExperience?.length || 0, "entries");
+  console.log("Projects:", structuredData.projects?.length || 0, "entries");
+  if (structuredData.projects && structuredData.projects.length > 0) {
+    console.log("Project Details:");
+    structuredData.projects.forEach((p: any, i: number) => {
+      console.log(`  ${i + 1}. ${p.name}`);
+      console.log(`     Description: ${p.description?.substring(0, 100) || 'N/A'}...`);
+      console.log(`     GitHub: ${p.github || 'N/A'}`);
+      console.log(`     URL: ${p.url || 'N/A'}`);
+    });
+  }
+  console.log("Skills:", structuredData.skills?.length || 0, "categories");
+  console.log("=== END PARSED OUTPUT ===\n");
 
   return {
     rawData,
