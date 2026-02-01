@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import Resume from "@/models/resume.model";
 import { User } from "@/models/user.model";
 import { connectToDatabase } from "@/database/db";
+import { storeResumeInVectorDB } from "@/lib/agent/vector-store";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,25 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("Resume saved successfully");
+
+    // Store resume in vector database for semantic search
+    try {
+      const vectorResult = await storeResumeInVectorDB(
+        userId,
+        savedResume._id,
+        savedResume.toObject()
+      );
+      
+      if (vectorResult.success) {
+        console.log(`Stored ${vectorResult.chunksStored} chunks in vector database`);
+      } else {
+        console.warn("Vector storage failed:", vectorResult.error);
+        // Don't fail the whole request if vector storage fails
+      }
+    } catch (vectorError) {
+      console.error("Vector storage error:", vectorError);
+      // Continue even if vector storage fails
+    }
 
     return NextResponse.json({
       success: true,
