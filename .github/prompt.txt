@@ -1,0 +1,96 @@
+AUTOJOB DEVELOPMENT GUIDE
+
+PROJECT OVERVIEW
+AutoJob - Automated job application platform using AI
+Tech Stack: Next.js 16, TypeScript, MongoDB, NextAuth.js, Tailwind CSS, shadcn/ui, Langchain
+
+CORE PRINCIPLES
+
+1. No Hardcoded Data
+   - Never use fake/mock data in production
+   - Always fetch from database or external APIs
+   - Use environment variables for configuration
+
+2. No Overcomplicated Fallbacks
+   - Simple try-catch with clear error messages
+   - Return consistent format: { success: boolean, data?, error? }
+
+3. ALWAYS Present Implementation Options First
+   - NEVER implement features without presenting 2-3 approaches first
+   - List pros/cons for each approach
+   - Wait for user to choose the preferred method
+   - Only then implement the chosen approach
+
+4. Remove Deprecated Code Immediately
+   - Clean up unused imports and files
+   - Keep codebase minimal and functional
+
+PROJECT STRUCTURE
+
+app/
+  (auth)/              - Auth routes (sign-in, sign-up)
+  (root)/              - Main app routes
+    jobs/              - Jobs listing
+    resume/            - Resume upload
+    artifacts/         - Generated artifacts
+  api/                 - API routes
+    jobs/              - Job endpoints
+    auth/              - NextAuth handler
+    resume/            - Resume endpoints
+    artifacts/         - Artifact generation
+models/                - Mongoose models
+lib/                   - Utilities
+  actions/             - Server actions
+  agents/              - AI agents
+  ai/                  - AI integrations
+components/            - React components
+database/              - DB connection
+
+AUTHENTICATION
+- NextAuth.js v5 with JWT sessions
+- Supports Credentials + Google OAuth
+- Protected routes: check session?.user?.id
+- Don't modify auth.ts format - NextAuth is strict
+
+DATABASE MODELS
+
+User: name, email, password, provider, role, studentProfile, resumeArtifacts, applyPolicy
+Job: externalJobId, source, company, title, location, description, requirements, skills
+Application: userId, jobId, resumeVariantUsed, status, attempts, timeline
+
+All models use Mongoose with TypeScript interfaces. Always use models?.ModelName || pattern.
+
+API PATTERNS
+
+Standard API Route:
+  - Check auth if needed (await auth())
+  - Connect to database
+  - Query data
+  - Return { success, data } or { success: false, error }
+  - Always use try-catch
+
+Standard Page Component:
+  - Use "use client" for hooks/event handlers
+  - Server components for async data fetching
+  - Consistent dark theme: bg-gray-950, gradient accents
+
+DEVELOPMENT WORKFLOW
+
+When user requests a feature:
+  1. Understand requirements
+  2. Present 2-3 implementation options with pros/cons
+  3. Wait for user choice
+  4. Implement with clear comments explaining WHY
+  5. Keep it simple - add complexity only when needed
+
+ENVIRONMENT VARIABLES
+MONGODB_URI, NEXTAUTH_SECRET, NEXTAUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPENAI_API_KEY
+
+CURRENT STATE
+- Authentication working (Credentials + Google)
+- Job listing and auto-apply endpoints
+- Resume upload with PDF parsing (using OpenAI gpt-3.5-turbo)
+- Basic artifact generation
+
+Remember: Present options before coding. Keep responses simple. Remove unnecessary code.
+Dont modify data models unnecessarily

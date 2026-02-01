@@ -5,7 +5,7 @@ import dns from "dns";
 dns.setServers(["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]);
 console.log("✓ DNS servers configured:", dns.getServers());
 
-const MONGODB_URI = process.env.MONGODB_URI!;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
   throw new Error("Please define mongo_uri in env variables");
