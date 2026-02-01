@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import Resume from "@/models/resume.model";
 import { User } from "@/models/user.model";
-import dbConnect from "@/database/db";
+import { connectToDatabase } from "@/database/db";
 
 export const runtime = "nodejs";
 
@@ -22,22 +22,20 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id;
-    const resumeData = await request.json();
+    const { resumeId, ...resumeData } = await request.json();
 
     console.log(`Saving resume for user ${userId}`);
 
     // Connect to database
-    await dbConnect();
-
-    // Check if user already has a resume
-    const existingResume = await Resume.findOne({ userId });
+    await connectToDatabase();
 
     let savedResume;
-    if (existingResume) {
-      // Update existing resume
-      console.log("Updating existing resume");
+    
+    if (resumeId) {
+      // Update existing resume by ID
+      console.log(`Updating resume ${resumeId}`);
       savedResume = await Resume.findOneAndUpdate(
-        { userId },
+        { _id: resumeId, userId }, // Ensure user owns this resume
         {
           ...resumeData,
           userId,
@@ -45,6 +43,16 @@ export async function POST(request: NextRequest) {
         },
         { new: true, runValidators: true }
       );
+      
+      if (!savedResume) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Resume not found or access denied",
+          },
+          { status: 404 }
+        );
+      }
     } else {
       // Create new resume
       console.log("Creating new resume");
@@ -55,10 +63,12 @@ export async function POST(request: NextRequest) {
         lastUpdated: new Date(),
       });
 
-      // Update user's resumeId
-      await User.findByIdAndUpdate(userId, {
-        resumeId: savedResume._id,
-      });
+      // Add resume to user's resumes array
+      await User.findByIdAndUpdate(
+        userId,
+        { $addToSet: { resumes: savedResume._id } },
+        { new: true }
+      );
     }
 
     console.log("Resume saved successfully");

@@ -1,6 +1,6 @@
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
-import { ChatOpenAI } from "@langchain/openai";
+import { Ollama } from "@langchain/ollama";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
@@ -355,20 +355,21 @@ const resumeSchema = z.object({
 });
 
 /**
- * Extract structured resume data from parsed PDF text using LangChain with OpenAI
+ * Extract structured resume data from parsed PDF text using LangChain with local Ollama
  * @param rawText - The raw text extracted from the PDF
  * @returns Structured resume data conforming to IResume interface
  */
 export async function extractResumeFields(
   rawText: string
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
-  console.log("Starting resume extraction with OpenAI...");
+  console.log("Starting resume extraction with local Ollama...");
   
-  // Initialize OpenAI with API key from environment
-  const model = new ChatOpenAI({
-    modelName: "gpt-3.5-turbo",
+  // Initialize Ollama with local instance
+  const model = new Ollama({
+    baseUrl: "http://localhost:11434",
+    model: "deepseek-r1:1.5b",
     temperature: 0.1,
-    openAIApiKey: process.env.OPENAI_API_KEY,
+    format: "json", // Force JSON output
   });
 
   // Create structured output parser
@@ -402,11 +403,10 @@ Output valid JSON only:`
     format_instructions: parser.getFormatInstructions(),
   });
 
-  console.log("Invoking OpenAI API...");
+  console.log("Invoking local Ollama...");
   
   // Invoke the model
-  const result = await model.invoke(formattedPrompt);
-  let response = result.content.toString();
+  let response = await model.invoke(formattedPrompt);
   
   console.log("Cleaning response...");
   
@@ -519,8 +519,8 @@ export async function parseAndExtractResume(
   const rawData = await parseResumePDF(file, fileName, fileSize);
   console.log(`✅ PDF parsed: ${rawData.pageCount} pages, ${rawData.rawText.length} characters`);
 
-  console.log("🤖 Extracting structured data with OpenAI...");
-  // Step 2: Extract structured fields using LangChain with OpenAI
+  console.log("🤖 Extracting structured data with local Ollama...");
+  // Step 2: Extract structured fields using LangChain with Ollama
   const structuredData = await extractResumeFields(rawData.rawText);
 
   // Add file metadata

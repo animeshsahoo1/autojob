@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`Parsing resume for user ${session.user.id}: ${file.name}`);
 
-    // Parse the PDF and extract structured data using LangChain + OpenAI
     console.log("Step 1: Extracting text from PDF...");
     const { rawData, structuredData } = await parseAndExtractResume(
       buffer,

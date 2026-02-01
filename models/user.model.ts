@@ -51,8 +51,8 @@ export interface IUser {
   studentProfile?: StudentProfile;
   resumeArtifacts?: ResumeArtifacts;
 
-  // Resume reference
-  resumeId?: mongoose.Types.ObjectId;
+  // Resume references
+  resumes?: mongoose.Types.ObjectId[];
 
   applyPolicy?: ApplyPolicy;
 
@@ -127,11 +127,10 @@ const userSchema = new Schema<IUser>(
       proofLinks: [String],
     },
 
-    resumeId: {
+    resumes: [{
       type: Schema.Types.ObjectId,
       ref: "Resume",
-      index: true,
-    },
+    }],
 
     applyPolicy: {
       maxApplicationsPerDay: { type: Number, default: 10 },
