@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Briefcase, MapPin, Building2, Sparkles, Ban } from "lucide-react";
 
 interface SkippedJob {
   _id: string;
@@ -56,110 +62,150 @@ export default function SkippedJobsPage() {
     return labels[reason] || reason;
   };
 
-  const getSkipReasonColor = (reason: string) => {
-    const colors: Record<string, string> = {
-      POLICY_BLOCK: "bg-red-100 text-red-800",
-      LOW_MATCH_SCORE: "bg-yellow-100 text-yellow-800",
-      MISSING_EVIDENCE: "bg-orange-100 text-orange-800",
-      COMPANY_COOLDOWN: "bg-purple-100 text-purple-800",
-      DUPLICATE: "bg-gray-100 text-gray-800",
-      KILL_SWITCH: "bg-red-100 text-red-800",
-      LOCATION_MISMATCH: "bg-blue-100 text-blue-800",
-      REMOTE_ONLY_MISMATCH: "bg-cyan-100 text-cyan-800",
+  const getSkipReasonVariant = (reason: string): "default" | "secondary" | "destructive" | "outline" => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      POLICY_BLOCK: "destructive",
+      LOW_MATCH_SCORE: "secondary",
+      MISSING_EVIDENCE: "secondary",
+      COMPANY_COOLDOWN: "outline",
+      DUPLICATE: "outline",
+      KILL_SWITCH: "destructive",
+      LOCATION_MISMATCH: "outline",
+      REMOTE_ONLY_MISMATCH: "outline",
     };
-    return colors[reason] || "bg-gray-100 text-gray-800";
+    return variants[reason] || "outline";
   };
 
   if (!session) {
     return (
-      <div className="p-8">
-        <p>Please sign in to view skipped jobs</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Please sign in to view skipped jobs</p>
+          <Button asChild className="mt-4">
+            <Link href="/sign-in">Sign In</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Spinner />
+          <span>Loading skipped jobs...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Skipped Jobs</h1>
-      <p className="text-gray-600 mb-6">
-        Jobs that were automatically skipped during discovery. Click on any job
-        to see AI analysis and suggestions for improvement.
-      </p>
-
-      {loading ? (
-        <div className="text-center py-12">Loading skipped jobs...</div>
-      ) : jobs.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <p className="text-gray-500">No skipped jobs found</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Run the discovery workflow to see skipped jobs
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Skipped Jobs</h1>
+          <p className="text-muted-foreground mt-1">
+            Jobs that were automatically skipped during discovery. Click on any job to see AI analysis and suggestions for improvement.
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {jobs.map((job) => (
-            <Link
-              key={job._id}
-              href={`/skipped-jobs/${job._id}`}
-              className="block bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="font-semibold text-lg">{job.title}</h3>
-                {job.hasAnalysis && (
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                    AI Analysis
-                  </span>
-                )}
-              </div>
 
-              <p className="text-gray-600 mb-2">{job.company}</p>
-              <p className="text-sm text-gray-500 mb-3">📍 {job.location}</p>
+        <Separator className="mb-8" />
 
-              {job.salary && (
-                <p className="text-sm text-green-600 mb-3">
-                  💰 {job.salary.currency}
-                  {job.salary.min.toLocaleString()} -{" "}
-                  {job.salary.max.toLocaleString()}
+        {jobs.length === 0 ? (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Ban className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                <p className="text-muted-foreground">No skipped jobs found</p>
+                <p className="text-sm text-muted-foreground/70 mt-2">
+                  Run the discovery workflow to see skipped jobs
                 </p>
-              )}
-
-              <div className="flex flex-wrap gap-1 mb-3">
-                {job.skills.slice(0, 3).map((skill) => (
-                  <span
-                    key={skill}
-                    className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                  >
-                    {skill}
-                  </span>
-                ))}
-                {job.skills.length > 3 && (
-                  <span className="text-xs text-gray-500">
-                    +{job.skills.length - 3} more
-                  </span>
-                )}
               </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {jobs.map((job) => (
+              <Link
+                key={job._id}
+                href={`/skipped-jobs/${job._id}`}
+                className="block"
+              >
+                <Card className="hover:bg-accent/50 transition-colors h-full flex flex-col">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                        <Briefcase className="h-5 w-5 text-primary" />
+                      </div>
+                      {job.hasAnalysis && (
+                        <Badge variant="default" className="text-xs shrink-0">
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          AI Analysis
+                        </Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-lg line-clamp-2">{job.title}</CardTitle>
+                    <CardDescription className="space-y-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Building2 className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{job.company}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <MapPin className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{job.location}</span>
+                      </div>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0 flex-1 flex flex-col justify-between">
+                    {job.salary && (
+                      <p className="text-sm font-medium text-green-500 mb-3">
+                        {job.salary.currency} {job.salary.min.toLocaleString()} - {job.salary.max.toLocaleString()}
+                      </p>
+                    )}
 
-              <div className="pt-3 border-t">
-                <span
-                  className={`text-xs px-2 py-1 rounded ${getSkipReasonColor(job.skipReason)}`}
-                >
-                  {getSkipReasonLabel(job.skipReason)}
-                </span>
-              </div>
+                    <div className="space-y-3">
+                      {job.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {job.skills.slice(0, 3).map((skill, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {job.skills.length > 3 && (
+                            <span className="text-xs text-muted-foreground">
+                              +{job.skills.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-              {job.skipReasoning && (
-                <p className="text-sm text-gray-600 mt-3 line-clamp-2">
-                  {job.skipReasoning}
-                </p>
-              )}
+                      <Separator />
 
-              <div className="mt-4 text-sm text-blue-600 hover:text-blue-800">
-                View analysis →
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+                      <div>
+                        <Badge variant={getSkipReasonVariant(job.skipReason)}>
+                          {getSkipReasonLabel(job.skipReason)}
+                        </Badge>
+                      </div>
+
+                      {job.skipReasoning && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {job.skipReasoning}
+                        </p>
+                      )}
+
+                      <p className="text-sm text-primary hover:underline">
+                        View analysis →
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

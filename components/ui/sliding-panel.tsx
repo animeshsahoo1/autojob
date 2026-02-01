@@ -2,6 +2,8 @@
 
 import { X } from "lucide-react";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface SlidingPanelProps {
   isOpen: boolean;
@@ -39,23 +41,25 @@ export function SlidingPanel({
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full md:w-[600px] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 shadow-2xl z-50 transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full w-full md:w-[600px] bg-background border-l shadow-2xl z-50 transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-2xl font-bold text-white">{title}</h2>
-          <button
+        <div className="flex items-center justify-between p-6">
+          <h2 className="text-2xl font-bold text-foreground">{title}</h2>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
           >
-            <X className="w-6 h-6 text-white" />
-          </button>
+            <X className="w-5 h-5" />
+          </Button>
         </div>
+        <Separator />
 
         {/* Content */}
-        <div className="h-[calc(100%-88px)] overflow-y-auto p-6">
+        <div className="h-[calc(100%-89px)] overflow-y-auto p-6">
           {children}
         </div>
       </div>
