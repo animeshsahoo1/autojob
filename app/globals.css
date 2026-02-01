@@ -123,3 +123,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide Next.js dev indicator */
+#__next-build-watcher {
+  display: none !important;
+}
