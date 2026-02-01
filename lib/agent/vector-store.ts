@@ -1,6 +1,12 @@
 import OpenAI from "openai";
 import type { IResume } from "@/models/resume.model";
-import { QdrantClient } from "@qdrant/js-client";
+import { QdrantClient } from "@qdrant/qdrant-js";
+
+// Configuration: Switch between local Ollama and OpenAI
+const USE_LOCAL_OLLAMA = false;
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_MODEL = "deepseek-r1:1.5b"; // Local Ollama model for embeddings
+const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 
 // Qdrant collection name for resume embeddings
 const COLLECTION_NAME = "resume_embeddings";
@@ -17,6 +23,8 @@ function getQdrantClient(): QdrantClient {
   return new QdrantClient({
     url: process.env.VECTOR_DB_ENDPOINT,
     apiKey: process.env.VECTOR_DB_API,
+    timeout: 30000, // 30 second timeout for cloud connections
+    checkCompatibility: false, // Skip version check to avoid extra request
   });
 }
 
@@ -191,9 +199,41 @@ ${pub.doi ? `DOI: ${pub.doi}` : ""}
 }
 
 /**
+ * Generate embeddings using local Ollama
+ */
+async function generateOllamaEmbedding(text: string): Promise<number[]> {
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt: text,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.embedding || data.embedding.length === 0) {
+      throw new Error("No embedding data returned from Ollama");
+    }
+
+    console.log(`Generated Ollama embedding with ${data.embedding.length} dimensions`);
+    return data.embedding;
+  } catch (error) {
+    console.error("Ollama embedding generation error:", error);
+    throw new Error(`Failed to generate Ollama embedding: ${(error as Error).message}`);
+  }
+}
+
+/**
  * Generate embeddings using OpenAI API
  */
-async function generateEmbedding(text: string): Promise<number[]> {
+async function generateOpenAIEmbedding(text: string): Promise<number[]> {
   try {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY environment variable is not set");
@@ -206,7 +246,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
     // Generate embedding using OpenAI's text-embedding-3-small model
     // Using 512 dimensions for cheapest testing (5x cheaper than full 1536 dims)
     const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
+      model: OPENAI_EMBEDDING_MODEL,
       input: text,
       encoding_format: "float",
       dimensions: 512, // Reduced from 1536 for cost savings
@@ -217,12 +257,25 @@ async function generateEmbedding(text: string): Promise<number[]> {
     }
 
     const embedding = response.data[0].embedding;
-    console.log(`Generated embedding with ${embedding.length} dimensions`);
+    console.log(`Generated OpenAI embedding with ${embedding.length} dimensions`);
     
     return embedding;
   } catch (error) {
-    console.error("Embedding generation error:", error);
-    throw new Error(`Failed to generate embedding: ${(error as Error).message}`);
+    console.error("OpenAI embedding generation error:", error);
+    throw new Error(`Failed to generate OpenAI embedding: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Generate embeddings - automatically switches between Ollama and OpenAI
+ */
+async function generateEmbedding(text: string): Promise<number[]> {
+  if (USE_LOCAL_OLLAMA) {
+    console.log(`Using local Ollama (${OLLAMA_MODEL}) for embeddings`);
+    return generateOllamaEmbedding(text);
+  } else {
+    console.log(`Using OpenAI (${OPENAI_EMBEDDING_MODEL}) for embeddings`);
+    return generateOpenAIEmbedding(text);
   }
 }
 

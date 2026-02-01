@@ -6,6 +6,148 @@ import { PromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
 import type { IResume } from "@/models/resume.model";
 
+// Configuration: Switch between local Ollama and OpenAI for LLM parsing
+const USE_LOCAL_OLLAMA = false ;
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_MODEL = "deepseek-r1:1.5b"; // Local Ollama model for parsing
+const OPENAI_MODEL = "gpt-3.5-turbo";
+
+/**
+ * Sanitize date values - convert "Present", "Current", empty strings, and invalid dates to undefined
+ * Only returns valid ISO date strings (YYYY-MM-DD) or undefined
+ */
+function sanitizeDate(value: any): string | undefined {
+  if (!value || typeof value !== 'string') return undefined;
+  
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'present' || normalized === 'current' || normalized === '') return undefined;
+  
+  // Try to parse the date - if invalid, return undefined
+  const parsedDate = new Date(value);
+  if (isNaN(parsedDate.getTime())) {
+    console.warn(`Invalid date format: "${value}" - converting to undefined`);
+    return undefined;
+  }
+  
+  // Return ISO format (YYYY-MM-DD)
+  return parsedDate.toISOString().split('T')[0];
+}
+
+/**
+ * Sanitize enum values - remove if not in allowed list
+ */
+function sanitizeEnum<T>(value: any, allowedValues: readonly T[]): T | undefined {
+  if (!value || typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  return allowedValues.includes(value as T) ? (value as T) : undefined;
+}
+
+/**
+ * Remove undefined/null fields from object
+ */
+function removeEmptyFields(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeEmptyFields(item));
+  }
+  
+  if (obj !== null && typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined && value !== null && value !== '') {
+        cleaned[key] = removeEmptyFields(value);
+      }
+    }
+    return cleaned;
+  }
+  
+  return obj;
+}
+
+/**
+ * Sanitize extracted resume data to prevent validation errors
+ */
+function sanitizeResumeData(data: any): any {
+  // Sanitize work experience
+  if (Array.isArray(data.workExperience)) {
+    data.workExperience = data.workExperience.map((exp: any) => {
+      const sanitized: any = { ...exp };
+      sanitized.startDate = sanitizeDate(exp.startDate);
+      sanitized.endDate = sanitizeDate(exp.endDate);
+      sanitized.employmentType = sanitizeEnum(exp.employmentType, ['full-time', 'part-time', 'internship', 'contract', 'freelance']);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize education
+  if (Array.isArray(data.education)) {
+    data.education = data.education.map((edu: any) => {
+      const sanitized: any = { ...edu };
+      sanitized.startDate = sanitizeDate(edu.startDate);
+      sanitized.endDate = sanitizeDate(edu.endDate);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize projects
+  if (Array.isArray(data.projects)) {
+    data.projects = data.projects.map((proj: any) => {
+      const sanitized: any = { ...proj };
+      sanitized.startDate = sanitizeDate(proj.startDate);
+      sanitized.endDate = sanitizeDate(proj.endDate);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize certifications
+  if (Array.isArray(data.certifications)) {
+    data.certifications = data.certifications.map((cert: any) => {
+      const sanitized: any = { ...cert };
+      sanitized.issueDate = sanitizeDate(cert.issueDate);
+      sanitized.expirationDate = sanitizeDate(cert.expirationDate);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize volunteer experience
+  if (Array.isArray(data.volunteerExperience)) {
+    data.volunteerExperience = data.volunteerExperience.map((vol: any) => {
+      const sanitized: any = { ...vol };
+      sanitized.startDate = sanitizeDate(vol.startDate);
+      sanitized.endDate = sanitizeDate(vol.endDate);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize top-level enum fields - remove if invalid
+  const remotePreference = sanitizeEnum(data.remotePreference, ['remote_only', 'hybrid', 'onsite', 'flexible']);
+  if (remotePreference) {
+    data.remotePreference = remotePreference;
+  } else {
+    delete data.remotePreference;
+  }
+
+  // Sanitize languages
+  if (Array.isArray(data.languages)) {
+    data.languages = data.languages.map((lang: any) => {
+      const sanitized: any = { ...lang };
+      sanitized.proficiency = sanitizeEnum(lang.proficiency, ['native', 'fluent', 'professional', 'intermediate', 'basic']);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  // Sanitize work authorization
+  if (Array.isArray(data.workAuthorization)) {
+    data.workAuthorization = data.workAuthorization.map((auth: any) => {
+      const sanitized: any = { ...auth };
+      sanitized.status = sanitizeEnum(auth.status, ['citizen', 'permanent_resident', 'work_visa', 'student_visa', 'requires_sponsorship']);
+      return removeEmptyFields(sanitized);
+    });
+  }
+
+  return data;
+}
+
 export interface ParsedResume {
   rawText: string;
   pageCount: number;
@@ -397,20 +539,149 @@ function cleanHallucinatedData(data: any, originalText: string): any {
 }
 
 /**
- * Extract structured resume data from parsed PDF text using LangChain with OpenAI
- * @param rawText - The raw text extracted from the PDF
- * @param userFeedback - Optional user feedback to improve parsing
- * @returns Structured resume data conforming to IResume interface
+ * Extract structured resume data using local Ollama
  */
-export async function extractResumeFields(
+async function extractWithOllama(
   rawText: string,
   userFeedback?: string[]
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
-  console.log("Starting resume extraction with OpenAI...");
+  console.log(`Starting resume extraction with local Ollama (${OLLAMA_MODEL})...`);
+  
+  // Build user feedback instructions
+  const feedbackInstructions = userFeedback && userFeedback.length > 0
+    ? `\n\nUSER PREFERENCES:\n${userFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n`
+    : '';
+  
+  const prompt = `You are a resume parser. Extract information from the resume text and output ONLY valid JSON.
+
+CRITICAL RULES:
+1. Output ONLY the JSON object, no explanations or markdown
+2. ONLY extract information that is EXPLICITLY written in the resume
+3. DO NOT infer, guess, or fill in missing information
+4. If a field is not present, leave it empty or omit it
+5. Email must be valid format (e.g., user@domain.com)
+6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
+7. For current positions, use empty string for endDate, NOT "Present"
+8. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
+
+IMPORTANT DATE FORMATTING:
+- Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
+- If only month/year is known, use first day: "July 2025" → "2025-07-01"
+- If date is unclear or not found, use empty string ""
+- For current/ongoing, leave endDate as empty string ""
+
+Extract the following structure:
+{
+  "personalInfo": { "fullName": string, "email": string, "phone": string, "linkedIn": string, "github": string, "portfolio": string },
+  "summary": string,
+  "education": [{ "institution": string, "degree": string, "major": string, "gpa": number, "startDate": string, "endDate": string }],
+  "workExperience": [{ "company": string, "position": string, "startDate": string, "endDate": string, "responsibilities": [string], "achievements": [string], "technologies": [string] }],
+  "skills": [{ "category": string, "skills": [string] }],
+  "projects": [{ "name": string, "description": string, "technologies": [string], "url": string, "github": string }],
+  "certifications": [{ "name": string, "issuer": string, "issueDate": string }]
+}
+
+Resume Text:
+${rawText}
+
+Output valid JSON only:`;
+
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt: prompt,
+        stream: false,
+        options: {
+          temperature: 0,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    let aiResponse = data.response;
+    
+    console.log("=== RAW OLLAMA RESPONSE ===");
+    console.log(aiResponse);
+    console.log("=== END RAW RESPONSE ===");
+    
+    // Clean up response
+    aiResponse = aiResponse
+      .replace(/<think>.*?<\/think>/gs, '')
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+      .trim();
+    
+    // Extract JSON
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      aiResponse = jsonMatch[0];
+    }
+    
+    console.log("=== CLEANED RESPONSE ===");
+    console.log(aiResponse);
+    console.log("=== END CLEANED RESPONSE ===");
+    
+    let jsonData = JSON.parse(aiResponse);
+    
+    // Fix common issues
+    if (!jsonData.personalInfo) {
+      jsonData.personalInfo = { fullName: "Unknown", email: "unknown@example.com" };
+    }
+    if (!jsonData.personalInfo.fullName) {
+      jsonData.personalInfo.fullName = "Unknown";
+    }
+    if (!jsonData.personalInfo.email) {
+      jsonData.personalInfo.email = "unknown@example.com";
+    }
+    
+    // Fix email format
+    if (jsonData.personalInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(jsonData.personalInfo.email)) {
+      const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
+      jsonData.personalInfo.email = emailMatch ? emailMatch[0] : "unknown@example.com";
+    }
+    
+    // Ensure arrays exist
+    if (!Array.isArray(jsonData.education)) jsonData.education = [];
+    if (!Array.isArray(jsonData.workExperience)) jsonData.workExperience = [];
+    if (!Array.isArray(jsonData.skills)) jsonData.skills = [];
+    
+    console.log("✅ Ollama extraction successful");
+    
+    // Sanitize data to prevent validation errors
+    jsonData = sanitizeResumeData(jsonData);
+    
+    return {
+      ...jsonData,
+      rawText,
+      parsedDate: new Date(),
+      lastUpdated: new Date(),
+    };
+  } catch (error) {
+    console.error("❌ Ollama extraction failed:", error);
+    throw new Error(`Failed to extract resume with Ollama: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Extract structured resume data using OpenAI
+ */
+async function extractWithOpenAI(
+  rawText: string,
+  userFeedback?: string[]
+): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
+  console.log(`Starting resume extraction with OpenAI (${OPENAI_MODEL})...`);
   
   // Initialize OpenAI with API key from environment
   const model = new ChatOpenAI({
-    modelName: "gpt-3.5-turbo",
+    modelName: OPENAI_MODEL,
     temperature: 0,
     openAIApiKey: process.env.OPENAI_API_KEY,
   });
@@ -435,8 +706,15 @@ CRITICAL RULES:
 3. DO NOT infer, guess, or fill in missing information
 4. If a field is not present, leave it empty or omit it
 5. Email must be valid format (e.g., user@domain.com)
-6. Use ISO dates (YYYY-MM-DD) or "Present"
-7. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
+6. Dates MUST be in ISO format YYYY-MM-DD (e.g., "2025-07-01") or leave empty
+7. For current positions, use empty string for endDate, NOT "Present"
+8. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
+
+IMPORTANT DATE FORMATTING:
+- Use YYYY-MM-DD format ONLY: "2025-07-01", "2024-05-15"
+- If only month/year is known, use first day: "July 2025" → "2025-07-01"
+- If date is unclear or not found, use empty string ""
+- For current/ongoing, leave endDate as empty string ""
 
 {format_instructions}
 
@@ -524,8 +802,8 @@ Output valid JSON only:`
     
     console.log("✅ JSON parsing successful - using extracted data directly");
     
-    // Skip Zod validation - use the extracted JSON directly
-    // The AI returned valid structured data, no need for strict schema validation
+    // Sanitize data to prevent validation errors
+    jsonData = sanitizeResumeData(jsonData);
     
     console.log("Resume extraction completed successfully");
 
@@ -537,28 +815,27 @@ Output valid JSON only:`
       lastUpdated: new Date(),
     };
   } catch (error) {
-    console.error("❌ Parsing failed with error:");
-    console.error(error);
-    console.error("Using fallback extraction");
-    
-    // Fallback: return minimal valid structure
-    const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
-    const phoneMatch = rawText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-    const lines = rawText.split('\n').filter(l => l.trim());
-    
-    return {
-      personalInfo: {
-        fullName: lines[0]?.trim() || "Unknown",
-        email: emailMatch ? emailMatch[0] : "unknown@example.com",
-        phone: phoneMatch ? phoneMatch[0] : undefined,
-      },
-      education: [],
-      workExperience: [],
-      skills: [],
-      rawText,
-      parsedDate: new Date(),
-      lastUpdated: new Date(),
-    };
+    console.error("❌ OpenAI parsing failed:", error);
+    throw new Error(`Failed to extract resume with OpenAI: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Extract structured resume data - automatically switches between Ollama and OpenAI
+ * @param rawText - The raw text extracted from the PDF
+ * @param userFeedback - Optional user feedback to improve parsing
+ * @returns Structured resume data conforming to IResume interface
+ */
+export async function extractResumeFields(
+  rawText: string,
+  userFeedback?: string[]
+): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
+  if (USE_LOCAL_OLLAMA) {
+    console.log(`Using local Ollama (${OLLAMA_MODEL}) for resume parsing`);
+    return extractWithOllama(rawText, userFeedback);
+  } else {
+    console.log(`Using OpenAI (${OPENAI_MODEL}) for resume parsing`);
+    return extractWithOpenAI(rawText, userFeedback);
   }
 }
 
