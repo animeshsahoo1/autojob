@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { Save, Plus, Trash2, User, FileText, GraduationCap, Briefcase, Code2, Lightbulb } from "lucide-react";
+import { Save, Plus, Trash2, User, FileText, GraduationCap, Briefcase, Code2, FolderKanban, Lightbulb } from "lucide-react";
 import type { IResume } from "@/models/resume.model";
 
 interface ResumeEditFormProps {
@@ -101,6 +101,33 @@ export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormPr
     setFormData(prev => ({
       ...prev,
       workExperience: prev.workExperience?.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addProject = () => {
+    setFormData(prev => ({
+      ...prev,
+      projects: [...(prev.projects || []), {
+        name: "",
+        description: "",
+      }]
+    }));
+  };
+
+  const updateProject = (index: number, field: string, value: any) => {
+    const updated = [...(formData.projects || [])];
+    if (field === 'technologies' && typeof value === 'string') {
+      updated[index] = { ...updated[index], technologies: value.split(',').map(s => s.trim()) };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
+    setFormData(prev => ({ ...prev, projects: updated }));
+  };
+
+  const removeProject = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      projects: prev.projects?.filter((_, i) => i !== index)
     }));
   };
 
@@ -372,6 +399,104 @@ export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormPr
                     onChange={(e) => updateWorkExperience(index, "description", e.target.value)}
                     rows={3}
                   />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Projects */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FolderKanban className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Projects</h2>
+            {formData.projects?.length ? (
+              <Badge variant="secondary">{formData.projects.length}</Badge>
+            ) : null}
+          </div>
+          <Button type="button" onClick={addProject} size="sm" variant="outline">
+            <Plus className="w-4 h-4 mr-1" />
+            Add Project
+          </Button>
+        </div>
+        <Separator />
+        <div className="space-y-4">
+          {formData.projects?.map((project, index) => (
+            <Card key={index}>
+              <CardContent className="pt-4 space-y-4">
+                <div className="flex justify-between items-start">
+                  <Badge variant="outline">Project {index + 1}</Badge>
+                  <Button
+                    type="button"
+                    onClick={() => removeProject(index)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                {/* Basic Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Project Name *</Label>
+                    <Input
+                      value={project.name || ""}
+                      onChange={(e) => updateProject(index, "name", e.target.value)}
+                      placeholder="E-Commerce Platform"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Your Role</Label>
+                    <Input
+                      value={project.role || ""}
+                      onChange={(e) => updateProject(index, "role", e.target.value)}
+                      placeholder="Full Stack Developer"
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={project.description || ""}
+                    onChange={(e) => updateProject(index, "description", e.target.value)}
+                    rows={3}
+                    placeholder="Brief overview of the project and its purpose..."
+                  />
+                </div>
+
+                {/* Technologies */}
+                <div className="space-y-2">
+                  <Label>Technologies (comma-separated)</Label>
+                  <Input
+                    value={project.technologies?.join(", ") || ""}
+                    onChange={(e) => updateProject(index, "technologies", e.target.value)}
+                    placeholder="React, Node.js, MongoDB, AWS"
+                  />
+                </div>
+
+                {/* Links */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>GitHub Repository</Label>
+                    <Input
+                      value={project.github || ""}
+                      onChange={(e) => updateProject(index, "github", e.target.value)}
+                      placeholder="https://github.com/username/repo"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Live Demo / URL</Label>
+                    <Input
+                      value={project.url || ""}
+                      onChange={(e) => updateProject(index, "url", e.target.value)}
+                      placeholder="https://myproject.com"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
