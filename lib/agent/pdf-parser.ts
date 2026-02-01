@@ -377,23 +377,24 @@ export async function extractResumeFields(
 
   console.log("Formatting prompt...");
   
-  // Create prompt template
+  // Create prompt template with stricter instructions
   const promptTemplate = PromptTemplate.fromTemplate(
-    `Extract resume information as JSON.
+    `You are a resume parser. Extract information from the resume text and output ONLY valid JSON.
 
-Instructions:
-- Use ISO dates (YYYY-MM-DD) or "Present"
-- Omit missing fields
-- Categorize skills (Programming Languages, Frameworks, Tools, etc.)
-- Extract ALL data accurately
-- DO NOT invent fields
+CRITICAL RULES:
+1. Output ONLY the JSON object, no explanations or markdown
+2. ALL required fields MUST be present: personalInfo, education (array), workExperience (array), skills (array)
+3. Email must be valid format (e.g., user@domain.com)
+4. Use ISO dates (YYYY-MM-DD) or "Present"
+5. Arrays cannot be empty - include at least [] for empty arrays
+6. DO NOT include any extra fields not in schema
 
 {format_instructions}
 
-Resume:
+Resume Text:
 {resume_text}
 
-JSON:`
+Output valid JSON only:`
   );
 
   // Format the prompt
@@ -409,27 +410,93 @@ JSON:`
   
   console.log("Cleaning response...");
   
-  // Clean up response - remove thinking tags and code blocks
+  // Clean up response - remove thinking tags, code blocks, and fix formatting
   response = response
     .replace(/<think>.*?<\/think>/gs, '') // Remove <think> tags
     .replace(/```json\s*/g, '') // Remove ```json
     .replace(/```\s*/g, '') // Remove ```
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
     .trim();
+  
+  // Extract JSON from response if wrapped in other text
+  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    response = jsonMatch[0];
+  }
   
   console.log("Parsing response...");
   
-  // Parse the output
-  const parsedResume = await parser.parse(response);
+  try {
+    // First try to parse as JSON to validate and fix
+    let jsonData = JSON.parse(response);
+    
+    // Fix common issues
+    // Ensure required fields exist with defaults
+    if (!jsonData.personalInfo) {
+      jsonData.personalInfo = { fullName: "Unknown", email: "unknown@example.com" };
+    }
+    if (!jsonData.personalInfo.fullName) {
+      jsonData.personalInfo.fullName = "Unknown";
+    }
+    if (!jsonData.personalInfo.email) {
+      jsonData.personalInfo.email = "unknown@example.com";
+    }
+    
+    // Fix email if it contains phone number or invalid format
+    if (jsonData.personalInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(jsonData.personalInfo.email)) {
+      // Extract email from text if exists
+      const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
+      jsonData.personalInfo.email = emailMatch ? emailMatch[0] : "unknown@example.com";
+    }
+    
+    // Ensure arrays exist
+    if (!Array.isArray(jsonData.education)) {
+      jsonData.education = [];
+    }
+    if (!Array.isArray(jsonData.workExperience)) {
+      jsonData.workExperience = [];
+    }
+    if (!Array.isArray(jsonData.skills)) {
+      jsonData.skills = [];
+    }
+    
+    // Convert back to JSON string for parser
+    response = JSON.stringify(jsonData);
+    
+    // Parse with Zod schema
+    const parsedResume = await parser.parse(response);
+    
+    console.log("Resume extraction completed successfully");
 
-  console.log("Resume extraction completed successfully");
-
-  // Add metadata
-  return {
-    ...parsedResume,
-    rawText,
-    parsedDate: new Date(),
-    lastUpdated: new Date(),
-  };
+    // Add metadata
+    return {
+      ...parsedResume,
+      rawText,
+      parsedDate: new Date(),
+      lastUpdated: new Date(),
+    };
+  } catch (error) {
+    console.error("Failed to parse JSON, using fallback extraction");
+    
+    // Fallback: return minimal valid structure
+    const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
+    const phoneMatch = rawText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    const lines = rawText.split('\n').filter(l => l.trim());
+    
+    return {
+      personalInfo: {
+        fullName: lines[0]?.trim() || "Unknown",
+        email: emailMatch ? emailMatch[0] : "unknown@example.com",
+        phone: phoneMatch ? phoneMatch[0] : undefined,
+      },
+      education: [],
+      workExperience: [],
+      skills: [],
+      rawText,
+      parsedDate: new Date(),
+      lastUpdated: new Date(),
+    };
+  }
 }
 
 /**
