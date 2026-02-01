@@ -54,6 +54,9 @@ export interface IUser {
   // Resume references
   resumes?: mongoose.Types.ObjectId[];
 
+  // User feedback for improving resume parsing
+  parsingFeedback?: string[];
+
   applyPolicy?: ApplyPolicy;
 
   lastRunAt?: Date;
@@ -131,6 +134,8 @@ const userSchema = new Schema<IUser>(
       type: Schema.Types.ObjectId,
       ref: "Resume",
     }],
+
+    parsingFeedback: [String],
 
     applyPolicy: {
       maxApplicationsPerDay: { type: Number, default: 10 },

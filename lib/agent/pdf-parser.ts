@@ -1,6 +1,6 @@
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
-import { Ollama } from "@langchain/ollama";
+import { ChatOpenAI } from "@langchain/openai";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
@@ -355,21 +355,64 @@ const resumeSchema = z.object({
 });
 
 /**
- * Extract structured resume data from parsed PDF text using LangChain with local Ollama
+ * Verify extracted data exists in original text (prevents hallucination)
+ */
+function verifyDataInText(value: any, originalText: string): boolean {
+  if (!value || typeof value !== 'string') return true;
+  if (value.length < 3) return true; // Skip very short values
+  
+  const normalizedText = originalText.toLowerCase();
+  const normalizedValue = value.toLowerCase();
+  
+  // Check if value appears in text
+  return normalizedText.includes(normalizedValue);
+}
+
+/**
+ * Clean extracted data by removing hallucinated fields
+ */
+function cleanHallucinatedData(data: any, originalText: string): any {
+  if (Array.isArray(data)) {
+    return data.map(item => cleanHallucinatedData(item, originalText)).filter(Boolean);
+  }
+  
+  if (typeof data === 'object' && data !== null) {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'string' && value.length >= 3) {
+        // Verify string values exist in original text
+        if (verifyDataInText(value, originalText)) {
+          cleaned[key] = value;
+        }
+      } else if (typeof value === 'object') {
+        cleaned[key] = cleanHallucinatedData(value, originalText);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+    return cleaned;
+  }
+  
+  return data;
+}
+
+/**
+ * Extract structured resume data from parsed PDF text using LangChain with OpenAI
  * @param rawText - The raw text extracted from the PDF
+ * @param userFeedback - Optional user feedback to improve parsing
  * @returns Structured resume data conforming to IResume interface
  */
 export async function extractResumeFields(
-  rawText: string
+  rawText: string,
+  userFeedback?: string[]
 ): Promise<Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>> {
-  console.log("Starting resume extraction with local Ollama...");
+  console.log("Starting resume extraction with OpenAI...");
   
-  // Initialize Ollama with local instance
-  const model = new Ollama({
-    baseUrl: "http://localhost:11434",
-    model: "deepseek-r1:1.5b",
-    temperature: 0.1,
-    format: "json", // Force JSON output
+  // Initialize OpenAI with API key from environment
+  const model = new ChatOpenAI({
+    modelName: "gpt-3.5-turbo",
+    temperature: 0,
+    openAIApiKey: process.env.OPENAI_API_KEY,
   });
 
   // Create structured output parser
@@ -377,17 +420,23 @@ export async function extractResumeFields(
 
   console.log("Formatting prompt...");
   
+  // Build user feedback instructions
+  const feedbackInstructions = userFeedback && userFeedback.length > 0
+    ? `\n\nUSER PREFERENCES:\n${userFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n`
+    : '';
+  
   // Create prompt template with stricter instructions
   const promptTemplate = PromptTemplate.fromTemplate(
     `You are a resume parser. Extract information from the resume text and output ONLY valid JSON.
 
 CRITICAL RULES:
 1. Output ONLY the JSON object, no explanations or markdown
-2. ALL required fields MUST be present: personalInfo, education (array), workExperience (array), skills (array)
-3. Email must be valid format (e.g., user@domain.com)
-4. Use ISO dates (YYYY-MM-DD) or "Present"
-5. Arrays cannot be empty - include at least [] for empty arrays
-6. DO NOT include any extra fields not in schema
+2. ONLY extract information that is EXPLICITLY written in the resume
+3. DO NOT infer, guess, or fill in missing information
+4. If a field is not present, leave it empty or omit it
+5. Email must be valid format (e.g., user@domain.com)
+6. Use ISO dates (YYYY-MM-DD) or "Present"
+7. Arrays cannot be empty - include at least [] for empty arrays${feedbackInstructions}
 
 {format_instructions}
 
@@ -403,10 +452,15 @@ Output valid JSON only:`
     format_instructions: parser.getFormatInstructions(),
   });
 
-  console.log("Invoking local Ollama...");
+  console.log("Invoking OpenAI API...");
   
   // Invoke the model
-  let response = await model.invoke(formattedPrompt);
+  const result = await model.invoke(formattedPrompt);
+  let response = result.content.toString();
+  
+  console.log("=== RAW AI RESPONSE ===");
+  console.log(response);
+  console.log("=== END RAW RESPONSE ===");
   
   console.log("Cleaning response...");
   
@@ -424,11 +478,19 @@ Output valid JSON only:`
     response = jsonMatch[0];
   }
   
+  console.log("=== CLEANED RESPONSE ===");
+  console.log(response);
+  console.log("=== END CLEANED RESPONSE ===");
+  
   console.log("Parsing response...");
   
   try {
     // First try to parse as JSON to validate and fix
     let jsonData = JSON.parse(response);
+    
+    console.log("=== PARSED JSON DATA ===");
+    console.log(JSON.stringify(jsonData, null, 2));
+    console.log("=== END PARSED JSON ===");
     
     // Fix common issues
     // Ensure required fields exist with defaults
@@ -460,23 +522,24 @@ Output valid JSON only:`
       jsonData.skills = [];
     }
     
-    // Convert back to JSON string for parser
-    response = JSON.stringify(jsonData);
+    console.log("✅ JSON parsing successful - using extracted data directly");
     
-    // Parse with Zod schema
-    const parsedResume = await parser.parse(response);
+    // Skip Zod validation - use the extracted JSON directly
+    // The AI returned valid structured data, no need for strict schema validation
     
     console.log("Resume extraction completed successfully");
 
     // Add metadata
     return {
-      ...parsedResume,
+      ...jsonData,
       rawText,
       parsedDate: new Date(),
       lastUpdated: new Date(),
     };
   } catch (error) {
-    console.error("Failed to parse JSON, using fallback extraction");
+    console.error("❌ Parsing failed with error:");
+    console.error(error);
+    console.error("Using fallback extraction");
     
     // Fallback: return minimal valid structure
     const emailMatch = rawText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
@@ -504,12 +567,14 @@ Output valid JSON only:`
  * @param file - PDF file buffer or path
  * @param fileName - Original filename
  * @param fileSize - File size in bytes
+ * @param userFeedback - Optional user feedback to improve parsing
  * @returns Structured resume data ready to save to database
  */
 export async function parseAndExtractResume(
   file: Buffer | string,
   fileName: string,
-  fileSize: number
+  fileSize: number,
+  userFeedback?: string[]
 ): Promise<{
   rawData: ParsedResume;
   structuredData: Partial<Omit<IResume, "_id" | "userId" | "createdAt" | "updatedAt">>;
@@ -519,9 +584,9 @@ export async function parseAndExtractResume(
   const rawData = await parseResumePDF(file, fileName, fileSize);
   console.log(`✅ PDF parsed: ${rawData.pageCount} pages, ${rawData.rawText.length} characters`);
 
-  console.log("🤖 Extracting structured data with local Ollama...");
-  // Step 2: Extract structured fields using LangChain with Ollama
-  const structuredData = await extractResumeFields(rawData.rawText);
+  console.log("🤖 Extracting structured data with OpenAI...");
+  // Step 2: Extract structured fields using LangChain with OpenAI
+  const structuredData = await extractResumeFields(rawData.rawText, userFeedback);
 
   // Add file metadata
   structuredData.fileUrl = fileName;

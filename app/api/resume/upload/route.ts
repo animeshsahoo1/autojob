@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { parseAndExtractResume } from "@/lib/agent/pdf-parser";
+import { connectToDatabase } from "@/database/db";
+import { User } from "@/models/user.model";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -63,11 +65,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`Parsing resume for user ${session.user.id}: ${file.name}`);
 
+    // Connect to database and get user's parsing feedback preferences
+    await connectToDatabase();
+    const user = await User.findById(session.user.id).select('parsingFeedback');
+    const userFeedback = user?.parsingFeedback || [];
+
     console.log("Step 1: Extracting text from PDF...");
     const { rawData, structuredData } = await parseAndExtractResume(
       buffer,
       file.name,
-      file.size
+      file.size,
+      userFeedback
     );
 
     console.log("✅ Resume extraction completed successfully");

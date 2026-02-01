@@ -17,6 +17,8 @@ interface ResumeEditFormProps {
 export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormProps) {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(initialData);
+  const [feedback, setFeedback] = useState("");
+  const [savingFeedback, setSavingFeedback] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +126,32 @@ export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormPr
       ...prev,
       skills: prev.skills?.filter((_, i) => i !== index)
     }));
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedback.trim()) return;
+    
+    setSavingFeedback(true);
+    try {
+      const response = await fetch("/api/resume/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: feedback.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to save feedback");
+      }
+
+      alert("Feedback saved! It will be used for future resume parsing.");
+      setFeedback("");
+    } catch (error) {
+      alert((error as Error).message);
+    } finally {
+      setSavingFeedback(false);
+    }
   };
 
   return (
@@ -400,6 +428,46 @@ export default function ResumeEditForm({ initialData, onSave }: ResumeEditFormPr
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Parsing Feedback Suggestion */}
+      <Card className="bg-black/40 backdrop-blur-sm border-white/10 hover:border-violet-500/30 transition-colors">
+        <CardHeader>
+          <CardTitle className="text-violet-300 flex items-center gap-2">
+            <div className="w-1 h-6 bg-violet-500 rounded-full"></div>
+            Improve Resume Parsing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            Help us parse your resume better next time. Add suggestions about your field, format preferences, or any specific details we should focus on.
+          </p>
+          <Textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            placeholder="e.g., 'Focus on technical skills for software engineering roles' or 'Include project links from GitHub'"
+            className="bg-black/60 border-white/10 text-white placeholder:text-gray-500 focus:border-violet-500/50 min-h-[80px]"
+          />
+          <Button
+            type="button"
+            onClick={handleFeedbackSubmit}
+            disabled={!feedback.trim() || savingFeedback}
+            variant="outline"
+            className="border-violet-500/30 text-violet-300 hover:bg-violet-500/10"
+          >
+            {savingFeedback ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Suggestion
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
 

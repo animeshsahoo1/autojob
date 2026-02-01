@@ -93,3 +93,4 @@ CURRENT STATE
 - Basic artifact generation
 
 Remember: Present options before coding. Keep responses simple. Remove unnecessary code.
+Dont modify data models unnecessarily
