@@ -1,39 +1,37 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { UserCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileText, Upload, LogOut, Briefcase, History } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { logout } from "@/lib/actions/auth";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const { data: session } = useSession();
-  const [profileDropdown, setProfileDropdown] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const navigate = (path: string) => {
-    router.push(path);
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
-  // Close profile dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target as Node)
-      ) {
-        setProfileDropdown(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   return (
-    <header
-      className="sticky top-0 left-0 right-0 z-50 bg-neutral-950 border-b border-neutral-800"
-    >
+    <header className="sticky top-0 left-0 right-0 z-50 bg-neutral-950 border-b border-neutral-800">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 py-4 flex items-center justify-between">
         {/* LOGO SECTION */}
         <Link
@@ -46,45 +44,64 @@ const Header = () => {
         {/* RIGHT SIDE - LOGIN/PROFILE */}
         <div className="flex items-center gap-4">
           {session?.user?.id ? (
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setProfileDropdown(!profileDropdown)}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-              >
-                <UserCircle2 className="w-8 h-8 text-white" strokeWidth={1.5} />
-              </button>
-
-              {/* Profile Dropdown */}
-              {profileDropdown && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-neutral-900 rounded-lg shadow-xl border border-neutral-800 py-2 z-50">
-                  <button
-                    onClick={() => {
-                      setProfileDropdown(false);
-                      navigate("/dashboard");
-                    }}
-                    className="w-full px-4 py-2 cursor-pointer text-left text-white hover:bg-neutral-800 transition-colors"
-                  >
-                    Dashboard
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setProfileDropdown(false);
-                      await logout();
-                    }}
-                    className="w-full px-4 cursor-pointer py-2 text-left text-red-400 hover:bg-neutral-800 transition-colors"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={session.user.image || ""} alt={session.user.name || "User"} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {getInitials(session.user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{session.user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {session.user.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => router.push("/jobs")}>
+                    <Briefcase className="mr-2 h-4 w-4" />
+                    Browse Jobs
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/logs")}>
+                    <History className="mr-2 h-4 w-4" />
+                    Activity Logs
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => router.push("/resume")}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Resume
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/my-resumes")}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    My Resumes
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    await logout();
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
-            <button
-              onClick={() => navigate("/sign-in")}
-              className="px-6 py-2 bg-white text-neutral-900 rounded-lg font-semibold hover:bg-neutral-200 transition-colors cursor-pointer"
-            >
+            <Button onClick={() => router.push("/sign-in")} variant="secondary">
               Login
-            </button>
+            </Button>
           )}
         </div>
       </div>
