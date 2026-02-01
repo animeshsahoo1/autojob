@@ -39,6 +39,20 @@ async function submitToSandboxAPI(
       throw new Error("Job does not have an apply URL");
     }
 
+    // For sandbox jobs, simulate successful submission without actually calling API
+    if (
+      job.source === "sandbox" ||
+      job.applyUrl.includes("sandbox.autojob.com")
+    ) {
+      console.log(
+        `[Apply] 🧪 Sandbox job detected - simulating successful submission`,
+      );
+      return {
+        success: true,
+        receipt: `SANDBOX-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      };
+    }
+
     // Build application payload
     const payload = {
       jobId: job.externalJobId,
@@ -52,7 +66,7 @@ async function submitToSandboxAPI(
       ),
     };
 
-    // Submit to sandbox API
+    // Submit to real API
     const response = await fetch(job.applyUrl, {
       method: "POST",
       headers: {
@@ -179,6 +193,14 @@ export async function applyNode(
         jobId: new mongoose.Types.ObjectId(currentJobId),
         userId: new mongoose.Types.ObjectId(state.userId),
         resumeVariantUsed,
+        answeredQuestions,
+        validationState: state.validationState
+          ? {
+              confidenceScore: state.validationState.confidenceScore,
+              isGrounded: state.validationState.isGrounded,
+              hallucinationRisks: state.validationState.hallucinationRisks,
+            }
+          : undefined,
         status: finalStatus,
         attempts,
         receipt: receipt || undefined,

@@ -9,6 +9,14 @@ export interface IApplication {
 
   resumeVariantUsed: string;
 
+  answeredQuestions?: { question: string; answer: string }[];
+
+  validationState?: {
+    confidenceScore: number;
+    isGrounded: boolean;
+    hallucinationRisks: string[];
+  };
+
   status: "QUEUED" | "SUBMITTED" | "FAILED" | "RETRIED";
 
   attempts: number;
@@ -61,6 +69,19 @@ const applicationSchema = new Schema<IApplication>(
       required: true,
     },
 
+    answeredQuestions: [
+      {
+        question: String,
+        answer: String,
+      },
+    ],
+
+    validationState: {
+      confidenceScore: Number,
+      isGrounded: Boolean,
+      hallucinationRisks: [String],
+    },
+
     status: {
       type: String,
       enum: ["QUEUED", "SUBMITTED", "FAILED", "RETRIED"],
@@ -104,7 +125,7 @@ const applicationSchema = new Schema<IApplication>(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Application =
