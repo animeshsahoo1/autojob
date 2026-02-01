@@ -53,7 +53,7 @@ const Header = () => {
     pathname === path || pathname?.startsWith(path + "/");
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pl-16">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pl-16 pr-16">
       <div className="container flex h-14 items-center">
         {/* Mobile Menu */}
         {session?.user?.id && (
