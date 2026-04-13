@@ -61,6 +61,8 @@ export default function SkippedJobDetailPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   useEffect(() => {
     if (!session?.user?.id || !id) return;
@@ -122,6 +124,16 @@ export default function SkippedJobDetailPage() {
   const totalSuggestions = analysis.suggestions.skillsToLearn.length + 
                           analysis.suggestions.projectsToAdd.length + 
                           analysis.suggestions.resumeImprovements.length;
+
+  const handleFeedback = (shouldHaveBeenSkipped: boolean) => {
+    if (shouldHaveBeenSkipped) {
+      setFeedbackMessage("Thanks for your feedback!");
+    } else {
+      setFeedbackMessage("Okay memory updated, from next time, jobs like this would not be skipped.");
+    }
+    setShowFeedback(true);
+    setTimeout(() => setShowFeedback(false), 3000);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -418,6 +430,41 @@ export default function SkippedJobDetailPage() {
             </Card>
           )}
         </div>
+
+        {/* Feedback Card */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Do you think this job should have been skipped?</CardTitle>
+            <CardDescription>
+              Help us improve our job matching algorithm
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Button 
+                onClick={() => handleFeedback(true)}
+                variant="outline"
+                className="flex-1"
+              >
+                Yes, it should be skipped
+              </Button>
+              <Button 
+                onClick={() => handleFeedback(false)}
+                variant="default"
+                className="flex-1"
+              >
+                No, I'm interested in this
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Toast Message */}
+        {showFeedback && (
+          <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-6 py-3 rounded-lg shadow-lg animate-in slide-in-from-bottom-5">
+            {feedbackMessage}
+          </div>
+        )}
       </div>
     </div>
   );

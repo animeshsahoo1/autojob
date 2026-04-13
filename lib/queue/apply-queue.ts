@@ -17,32 +17,40 @@ export interface ApplyJobData {
   artifactState?: ArtifactState; // Passed from Discovery workflow
 }
 
+let applyQueue: Queue<ApplyJobData> | null = null;
+
 /**
- * Create the Apply Queue
+ * Get or create the Apply Queue (singleton pattern for serverless)
  */
-export const applyQueue = new Queue<ApplyJobData>("apply-jobs", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3, // 1 initial + 2 retries
-    backoff: {
-      type: "exponential",
-      delay: 5000, // 5s, 10s, 20s
-    },
-    removeOnComplete: {
-      age: 86400, // Keep completed jobs for 24 hours
-      count: 1000, // Keep last 1000 completed jobs
-    },
-    removeOnFail: {
-      age: 86400 * 7, // Keep failed jobs for 7 days
-    },
-  },
-});
+function getApplyQueue() {
+  if (!applyQueue) {
+    applyQueue = new Queue<ApplyJobData>("apply-jobs", {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3, // 1 initial + 2 retries
+        backoff: {
+          type: "exponential",
+          delay: 5000, // 5s, 10s, 20s
+        },
+        removeOnComplete: {
+          age: 86400, // Keep completed jobs for 24 hours
+          count: 1000, // Keep last 1000 completed jobs
+        },
+        removeOnFail: {
+          age: 86400 * 7, // Keep failed jobs for 7 days
+        },
+      },
+    });
+  }
+  return applyQueue;
+}
 
 /**
  * Add a job to the Apply Queue
  */
 export async function enqueueApplyJob(data: ApplyJobData) {
-  const job = await applyQueue.add("apply-to-job", data, {
+  const queue = getApplyQueue();
+  const job = await queue.add("apply-to-job", data, {
     jobId: data.queueRecordId, // Use queueRecordId as BullMQ job ID for idempotency
   });
 
@@ -53,12 +61,13 @@ export async function enqueueApplyJob(data: ApplyJobData) {
  * Get queue metrics
  */
 export async function getApplyQueueMetrics() {
+  const queue = getApplyQueue();
   const [waiting, active, completed, failed, delayed] = await Promise.all([
-    applyQueue.getWaitingCount(),
-    applyQueue.getActiveCount(),
-    applyQueue.getCompletedCount(),
-    applyQueue.getFailedCount(),
-    applyQueue.getDelayedCount(),
+    queue.getWaitingCount(),
+    queue.getActiveCount(),
+    queue.getCompletedCount(),
+    queue.getFailedCount(),
+    queue.getDelayedCount(),
   ]);
 
   return {

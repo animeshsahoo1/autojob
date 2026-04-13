@@ -60,6 +60,8 @@ export default function ApplicationDetailPage() {
   const router = useRouter();
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   useEffect(() => {
     fetchApplication();
@@ -76,6 +78,16 @@ export default function ApplicationDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFeedback = (shouldHaveBeenSkipped: boolean) => {
+    if (shouldHaveBeenSkipped) {
+      setFeedbackMessage("Thanks for your feedback!");
+    } else {
+      setFeedbackMessage("Great! We're glad this application was helpful.");
+    }
+    setShowFeedback(true);
+    setTimeout(() => setShowFeedback(false), 3000);
   };
 
   const getStatusVariant = (status: string): "default" | "secondary" | "destructive" => {
@@ -485,6 +497,41 @@ export default function ApplicationDetailPage() {
             </Card>
           </div>
         </div>
+
+        {/* Feedback Card */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Do you think this job should have been skipped?</CardTitle>
+            <CardDescription>
+              Help us improve our job matching algorithm
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Button 
+                onClick={() => handleFeedback(true)}
+                variant="outline"
+                className="flex-1"
+              >
+                Yes, it should be skipped
+              </Button>
+              <Button 
+                onClick={() => handleFeedback(false)}
+                variant="default"
+                className="flex-1"
+              >
+                No, I'm interested in this
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Toast Message */}
+        {showFeedback && (
+          <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-6 py-3 rounded-lg shadow-lg animate-in slide-in-from-bottom-5">
+            {feedbackMessage}
+          </div>
+        )}
       </div>
     </div>
   );
